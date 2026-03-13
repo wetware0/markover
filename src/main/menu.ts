@@ -32,6 +32,16 @@ export function buildMenu(window: BrowserWindow): Menu {
           click: () => sendAction('save-as'),
         },
         { type: 'separator' },
+        {
+          label: 'Print...',
+          accelerator: 'CmdOrCtrl+P',
+          click: () => sendAction('print'),
+        },
+        {
+          label: 'Export PDF...',
+          click: () => sendAction('export-pdf'),
+        },
+        { type: 'separator' },
         { role: 'quit' },
       ],
     },

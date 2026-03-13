@@ -272,3 +272,46 @@
   text-decoration: line-through;
   text-decoration-color: #ef4444;
 }
+
+/* Print styles */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Hide toolbar, sidebar, statusbar */
+  .flex.items-center.gap-0\\.5 { display: none !important; }
+
+  .ProseMirror {
+    padding: 0 !important;
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+
+  .ProseMirror pre {
+    border: 1px solid #ccc;
+    background: #f5f5f5 !important;
+    color: black !important;
+  }
+
+  .ProseMirror .markover-highlight {
+    background-color: transparent !important;
+    border-bottom: none !important;
+  }
+
+  .ProseMirror .markover-insert {
+    background-color: transparent !important;
+    border-bottom: none !important;
+    color: inherit !important;
+  }
+
+  .ProseMirror .markover-delete {
+    display: none !important;
+  }
+
+  .ProseMirror .mermaid-block {
+    border: 1px solid #ccc;
+    background: white !important;
+  }
+}

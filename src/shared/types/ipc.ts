@@ -20,6 +20,8 @@ export const IPC_CHANNELS = {
   SPELLCHECK_GET_LANGUAGES: 'spellcheck:get-languages',
   SPELLCHECK_SET_LANGUAGES: 'spellcheck:set-languages',
   SPELLCHECK_ADD_WORD: 'spellcheck:add-word',
+  PRINT: 'print:print',
+  EXPORT_PDF: 'print:export-pdf',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -34,6 +36,8 @@ export interface ElectronAPI {
   spellcheckGetLanguages: () => Promise<string[]>;
   spellcheckSetLanguages: (languages: string[]) => Promise<void>;
   spellcheckAddWord: (word: string) => Promise<void>;
+  print: () => Promise<void>;
+  exportPdf: () => Promise<{ success: boolean; filePath?: string } | null>;
 }
 
 declare global {

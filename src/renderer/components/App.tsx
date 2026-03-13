@@ -255,6 +255,12 @@ export function App() {
         case 'toggle-track-changes':
           setTrackChangesEnabled(!trackChangesEnabled);
           break;
+        case 'print':
+          window.electronAPI.print();
+          break;
+        case 'export-pdf':
+          window.electronAPI.exportPdf();
+          break;
       }
     });
     return unsubscribe;

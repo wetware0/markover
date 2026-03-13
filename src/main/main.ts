@@ -143,6 +143,36 @@ ipcMain.handle(IPC_CHANNELS.FILE_SAVE_AS, async (_event, content: string) => {
   }
 });
 
+// Print & PDF Export
+ipcMain.handle(IPC_CHANNELS.PRINT, async () => {
+  if (!mainWindow) return;
+  mainWindow.webContents.print({ silent: false, printBackground: true });
+});
+
+ipcMain.handle(IPC_CHANNELS.EXPORT_PDF, async () => {
+  if (!mainWindow) return null;
+
+  const result = await dialog.showSaveDialog(mainWindow, {
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    defaultPath: currentFilePath
+      ? currentFilePath.replace(/\.[^.]+$/, '.pdf')
+      : 'untitled.pdf',
+  });
+
+  if (result.canceled || !result.filePath) return null;
+
+  try {
+    const pdfData = await mainWindow.webContents.printToPDF({
+      printBackground: true,
+      margins: { marginType: 'default' },
+    });
+    await fs.writeFile(result.filePath, pdfData);
+    return { success: true, filePath: result.filePath };
+  } catch {
+    return { success: false };
+  }
+});
+
 // Spellcheck IPC
 ipcMain.handle(IPC_CHANNELS.SPELLCHECK_GET_LANGUAGES, () => {
   return session.defaultSession.getSpellCheckerLanguages();
