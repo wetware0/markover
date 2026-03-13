@@ -23,7 +23,11 @@ import {
   MessageSquarePlus,
   PanelRight,
   GitCompare,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react';
+import { useThemeStore } from '../../store/theme-store';
 
 interface ToolbarProps {
   editor: Editor | null;
@@ -48,8 +52,8 @@ function ToolbarButton({ onClick, isActive, disabled, title, children }: Toolbar
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors ${
-        isActive ? 'bg-gray-200 text-blue-600' : 'text-gray-700'
+      className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors ${
+        isActive ? 'bg-gray-200 dark:bg-gray-600 text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'
       }`}
     >
       {children}
@@ -58,16 +62,19 @@ function ToolbarButton({ onClick, isActive, disabled, title, children }: Toolbar
 }
 
 function ToolbarDivider() {
-  return <div className="w-px h-6 bg-gray-300 mx-1" />;
+  return <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />;
 }
 
 export function Toolbar({ editor, onAddComment, onToggleSidebar, trackChangesEnabled, onToggleTrackChanges }: ToolbarProps) {
+  const { mode, cycle } = useThemeStore();
   if (!editor) return null;
 
   const iconSize = 18;
+  const ThemeIcon = mode === 'light' ? Sun : mode === 'dark' ? Moon : Monitor;
+  const themeLabel = mode === 'light' ? 'Light' : mode === 'dark' ? 'Dark' : 'System';
 
   return (
-    <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-gray-200 bg-gray-50 flex-shrink-0 overflow-x-auto">
+    <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-shrink-0 overflow-x-auto">
       {/* Undo/Redo */}
       <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)">
         <Undo size={iconSize} />
@@ -185,6 +192,11 @@ export function Toolbar({ editor, onAddComment, onToggleSidebar, trackChangesEna
       </ToolbarButton>
 
       <div className="flex-1" />
+
+      {/* Theme toggle */}
+      <ToolbarButton onClick={cycle} title={`Theme: ${themeLabel}`}>
+        <ThemeIcon size={iconSize} />
+      </ToolbarButton>
 
       {/* Sidebar toggle */}
       <ToolbarButton onClick={() => onToggleSidebar?.()} title="Toggle Sidebar">

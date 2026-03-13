@@ -16,15 +16,15 @@ export function CommentsPanel({ onNavigateToComment, onDeleteComment }: Comments
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
-        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200">
           <MessageSquare size={16} />
           Comments ({comments.length})
         </div>
         <select
           value={filter}
           onChange={(e) => setFilter(e.target.value as typeof filter)}
-          className="text-xs border border-gray-300 rounded px-1.5 py-0.5"
+          className="text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded px-1.5 py-0.5"
         >
           <option value="all">All</option>
           <option value="open">Open</option>
@@ -35,7 +35,7 @@ export function CommentsPanel({ onNavigateToComment, onDeleteComment }: Comments
 
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <div className="p-4 text-sm text-gray-400 text-center">
+          <div className="p-4 text-sm text-gray-400 dark:text-gray-500 text-center">
             No comments yet. Select text and click the comment button to add one.
           </div>
         ) : (
@@ -96,7 +96,7 @@ function CommentThread({
 
   return (
     <div
-      className={`border-b border-gray-200 ${isActive ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+      className={`border-b border-gray-200 dark:border-gray-700 ${isActive ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-gray-50 dark:hover:bg-gray-750'}`}
       onClick={onActivate}
     >
       <div className="px-3 py-2">
@@ -106,11 +106,11 @@ function CommentThread({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-              className="p-0.5 hover:bg-gray-200 rounded"
+              className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
             >
               {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
-            <span className="text-sm font-medium text-gray-800">{comment.author}</span>
+            <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{comment.author}</span>
             <span className={`text-xs px-1.5 py-0.5 rounded ${statusColor}`}>
               {comment.status}
             </span>
@@ -123,16 +123,16 @@ function CommentThread({
         {expanded && (
           <>
             {/* Comment body */}
-            <p className="text-sm text-gray-700 ml-6 mb-2">{comment.content}</p>
+            <p className="text-sm text-gray-700 dark:text-gray-300 ml-6 mb-2">{comment.content}</p>
 
             {/* Replies */}
             {comment.replies.map((reply) => (
-              <div key={reply.id} className="ml-6 pl-3 border-l-2 border-gray-200 mb-2">
+              <div key={reply.id} className="ml-6 pl-3 border-l-2 border-gray-200 dark:border-gray-600 mb-2">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-sm font-medium text-gray-700">{reply.author}</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{reply.author}</span>
                   <span className="text-xs text-gray-400">{formatDate(reply.date)}</span>
                 </div>
-                <p className="text-sm text-gray-600">{reply.content}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{reply.content}</p>
               </div>
             ))}
 
@@ -145,13 +145,13 @@ function CommentThread({
                 onKeyDown={(e) => e.key === 'Enter' && handleReply()}
                 onClick={(e) => e.stopPropagation()}
                 placeholder="Reply..."
-                className="flex-1 text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                className="flex-1 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
               />
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleReply(); }}
                 disabled={!replyText.trim()}
-                className="p-1 text-blue-600 hover:bg-blue-100 rounded disabled:opacity-30"
+                className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900 rounded disabled:opacity-30"
               >
                 <Send size={14} />
               </button>

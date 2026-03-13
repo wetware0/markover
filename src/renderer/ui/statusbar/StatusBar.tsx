@@ -8,7 +8,7 @@ export function StatusBar() {
   const { enabled: trackChangesOn } = useTrackChangesStore();
 
   return (
-    <div className="flex items-center justify-between px-4 py-1 text-xs text-gray-500 bg-gray-100 border-t border-gray-200 flex-shrink-0 select-none">
+    <div className="flex items-center justify-between px-4 py-1 text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 select-none">
       <div className="flex items-center gap-4">
         <span>
           {fileName}

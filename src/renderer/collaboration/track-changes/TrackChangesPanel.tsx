@@ -22,8 +22,8 @@ export function TrackChangesPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
-        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200">
           <GitCompare size={16} />
           Track Changes
         </div>
@@ -32,8 +32,8 @@ export function TrackChangesPanel({
           onClick={toggle}
           className={`text-xs px-2 py-0.5 rounded font-medium transition-colors ${
             enabled
-              ? 'bg-green-100 text-green-700 hover:bg-green-200'
-              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
           }`}
         >
           {enabled ? 'ON' : 'OFF'}
@@ -41,7 +41,7 @@ export function TrackChangesPanel({
       </div>
 
       {changes.length > 0 && (
-        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
           <button
             type="button"
             onClick={onAcceptAll}
@@ -61,7 +61,7 @@ export function TrackChangesPanel({
 
       <div className="flex-1 overflow-y-auto">
         {changes.length === 0 ? (
-          <div className="p-4 text-sm text-gray-400 text-center">
+          <div className="p-4 text-sm text-gray-400 dark:text-gray-500 text-center">
             {enabled
               ? 'No changes tracked yet. Start editing to track changes.'
               : 'Track changes is off. Turn it on to start tracking.'}
@@ -70,7 +70,7 @@ export function TrackChangesPanel({
           changes.map((change) => (
             <div
               key={change.id}
-              className="flex items-start gap-2 px-3 py-2 border-b border-gray-100 hover:bg-gray-50"
+              className="flex items-start gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750"
             >
               <div
                 className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${
@@ -79,12 +79,12 @@ export function TrackChangesPanel({
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-xs font-medium text-gray-700">{change.author}</span>
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{change.author}</span>
                   <span
                     className={`text-xs px-1 py-0.5 rounded ${
                       change.type === 'insertion'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-red-100 text-red-700'
+                        ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+                        : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
                     }`}
                   >
                     {change.type === 'insertion' ? 'Added' : 'Deleted'}
