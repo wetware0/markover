@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "katex/dist/katex.min.css";
 
 .ProseMirror {
   outline: none;
@@ -160,4 +161,86 @@
 .ProseMirror mark {
   background-color: #fef08a;
   padding: 0.1em 0;
+}
+
+/* KaTeX */
+.ProseMirror .katex-inline {
+  display: inline;
+  cursor: default;
+}
+
+.ProseMirror .katex-block {
+  display: block;
+  text-align: center;
+  margin: 1em 0;
+  padding: 0.5em;
+  cursor: default;
+}
+
+/* Mermaid */
+.ProseMirror .mermaid-block {
+  display: block;
+  text-align: center;
+  margin: 1em 0;
+  padding: 1em;
+  background: #f9fafb;
+  border-radius: 0.5em;
+  border: 1px solid #e5e7eb;
+  cursor: default;
+  overflow-x: auto;
+}
+
+.ProseMirror .mermaid-block svg {
+  max-width: 100%;
+}
+
+.ProseMirror .mermaid-error {
+  color: #dc2626;
+  font-size: 0.85em;
+  text-align: left;
+}
+
+/* Front matter */
+.ProseMirror .front-matter {
+  background: #f3f4f6;
+  border: 1px dashed #9ca3af;
+  border-radius: 0.5em;
+  padding: 0.75em 1em;
+  margin-bottom: 1em;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85em;
+  cursor: default;
+}
+
+.ProseMirror .front-matter-label {
+  font-size: 0.75em;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25em;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.ProseMirror .front-matter-content {
+  margin: 0;
+  padding: 0;
+  background: none;
+  color: #374151;
+}
+
+/* Footnotes */
+.ProseMirror .footnote-ref {
+  vertical-align: super;
+  font-size: 0.75em;
+}
+
+.ProseMirror .footnote-ref a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.ProseMirror .footnote-item {
+  font-size: 0.9em;
+  color: #4b5563;
+  margin: 0.25em 0;
 }

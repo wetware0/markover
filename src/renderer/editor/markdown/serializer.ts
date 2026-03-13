@@ -277,6 +277,51 @@ const nodeHandlers: Record<string, NodeHandler> = {
   tableRow() { /* handled by table */ },
   tableCell() { /* handled by table */ },
   tableHeader() { /* handled by table */ },
+
+  // KaTeX
+  katexInline(state, node) {
+    state.write(`$${node.attrs.math}$`);
+  },
+
+  katexBlock(state, node) {
+    state.write('$$\n');
+    state.write(node.attrs.math);
+    state.ensureNewLine();
+    state.write('$$');
+    state.closeBlock();
+  },
+
+  // Mermaid
+  mermaidBlock(state, node) {
+    state.write('```mermaid\n');
+    state.write(node.attrs.code);
+    state.ensureNewLine();
+    state.write('```');
+    state.closeBlock();
+  },
+
+  // Front matter
+  frontMatter(state, node) {
+    state.write('---\n');
+    state.write(node.attrs.content);
+    state.ensureNewLine();
+    state.write('---');
+    state.closeBlock();
+  },
+
+  // Footnotes
+  footnoteRef(state, node) {
+    state.write(`[^${node.attrs.label || node.attrs.id}]`);
+  },
+
+  footnoteBlock(state, node) {
+    const id = node.attrs.id;
+    state.write(`[^${id}]: `);
+    const inner = new MarkdownSerializerState();
+    inner.renderContent(node);
+    state.write(inner.getOutput().trim());
+    state.closeBlock();
+  },
 };
 
 // --- Mark Wrappers ---

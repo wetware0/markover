@@ -16,6 +16,12 @@ import { useCallback, useRef } from 'react';
 import type { Editor } from '@tiptap/core';
 import { markdownToHtml } from './markdown/parser';
 import { prosemirrorToMarkdown } from './markdown/serializer';
+import { KatexInline } from './extensions/katex-inline';
+import { KatexBlock } from './extensions/katex-block';
+import { MermaidBlock } from './extensions/mermaid-block';
+import { FootnoteRef, FootnoteBlock } from './extensions/footnote';
+import { FrontMatter } from './extensions/front-matter';
+import { ImageDrop } from './extensions/image-drop';
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -59,6 +65,13 @@ export function useMarkoverEditor() {
       TableRow,
       TableCell,
       TableHeader,
+      KatexInline,
+      KatexBlock,
+      MermaidBlock,
+      FootnoteRef,
+      FootnoteBlock,
+      FrontMatter,
+      ImageDrop,
     ],
     content: '',
     onUpdate: ({ editor }) => {
