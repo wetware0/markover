@@ -350,6 +350,21 @@ function getMarkWrapper(mark: Mark): { open: string; close: string } | null {
     }
     case 'highlight':
       return { open: '==', close: '==' };
+    case 'markovHighlight':
+      return {
+        open: `<!-- markover:hl-start id="${mark.attrs.commentId}" -->`,
+        close: `<!-- markover:hl-end id="${mark.attrs.commentId}" -->`,
+      };
+    case 'markovInsert':
+      return {
+        open: `<!-- markover:ins-start id="${mark.attrs.changeId}" author="${mark.attrs.author}" date="${mark.attrs.date}" -->`,
+        close: `<!-- markover:ins-end id="${mark.attrs.changeId}" -->`,
+      };
+    case 'markovDelete':
+      return {
+        open: `<!-- markover:del-start id="${mark.attrs.changeId}" author="${mark.attrs.author}" date="${mark.attrs.date}" -->`,
+        close: `<!-- markover:del-end id="${mark.attrs.changeId}" -->`,
+      };
     default:
       return null;
   }

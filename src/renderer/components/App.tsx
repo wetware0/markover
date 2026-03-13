@@ -82,13 +82,9 @@ export function App() {
     editor.chain().focus().setMarkovHighlight({ commentId }).run();
     addComment(commentId, content);
 
-    const meta = getMetadata();
-    meta.highlights.push({ id: commentId, startOffset: 0, endOffset: 0 });
-    setMetadata(meta);
-
     setSidebarOpen(true);
     setSidebarTab('comments');
-  }, [editor, addComment, getMetadata, setMetadata]);
+  }, [editor, addComment]);
 
   // Delete comment
   const handleDeleteComment = useCallback(
@@ -96,13 +92,8 @@ export function App() {
       if (!editor) return;
       editor.chain().focus().unsetMarkovHighlight(commentId).run();
       removeComment(commentId);
-
-      const meta = getMetadata();
-      meta.highlights = meta.highlights.filter((h) => h.id !== commentId);
-      meta.comments = meta.comments.filter((c) => c.id !== commentId);
-      setMetadata(meta);
     },
-    [editor, removeComment, getMetadata, setMetadata],
+    [editor, removeComment],
   );
 
   // Navigate to comment
@@ -126,51 +117,70 @@ export function App() {
     [editor],
   );
 
-  // Accept a tracked change (remove marks, keep the text for insertions)
+  // Accept a tracked change
   const handleAcceptChange = useCallback(
     (changeId: string) => {
       if (!editor) return;
-      editor.chain().focus().unsetMarkovInsert(changeId).run();
-      // For deletions, the text stays removed (just remove the mark)
-      editor.chain().focus().unsetMarkovDelete(changeId).run();
+      const change = changes.find((c) => c.id === changeId);
+      if (!change) return;
+
+      if (change.type === 'insertion') {
+        // Accept insertion: remove the mark, keep the text
+        editor.chain().focus().unsetMarkovInsert(changeId).run();
+      } else {
+        // Accept deletion: remove the struck-through text entirely
+        const { doc } = editor.state;
+        const tr = editor.state.tr;
+        tr.setMeta('trackChangesProcessed', true);
+        const positions: Array<{ from: number; to: number }> = [];
+        doc.descendants((node, pos) => {
+          if (!node.isText) return;
+          const mark = node.marks.find(
+            (m) => m.type.name === 'markovDelete' && m.attrs.changeId === changeId,
+          );
+          if (mark) positions.push({ from: pos, to: pos + node.nodeSize });
+        });
+        for (let i = positions.length - 1; i >= 0; i--) {
+          tr.delete(positions[i].from, positions[i].to);
+        }
+        if (positions.length > 0) editor.view.dispatch(tr);
+      }
       removeChange(changeId);
     },
-    [editor, removeChange],
+    [editor, changes, removeChange],
   );
 
-  // Reject a tracked change (for insertions: remove text; for deletions: keep text)
+  // Reject a tracked change
   const handleRejectChange = useCallback(
     (changeId: string) => {
       if (!editor) return;
-      const { doc, tr } = editor.state;
+      const change = changes.find((c) => c.id === changeId);
+      if (!change) return;
 
-      // Find and remove inserted text
-      const positionsToRemove: Array<{ from: number; to: number }> = [];
-      doc.descendants((node, pos) => {
-        if (!node.isText) return;
-        const mark = node.marks.find(
-          (m) => m.type.name === 'markovInsert' && m.attrs.changeId === changeId,
-        );
-        if (mark) {
-          positionsToRemove.push({ from: pos, to: pos + node.nodeSize });
+      if (change.type === 'insertion') {
+        // Reject insertion: remove the inserted text entirely
+        const { doc } = editor.state;
+        const tr = editor.state.tr;
+        tr.setMeta('trackChangesProcessed', true);
+        const positions: Array<{ from: number; to: number }> = [];
+        doc.descendants((node, pos) => {
+          if (!node.isText) return;
+          const mark = node.marks.find(
+            (m) => m.type.name === 'markovInsert' && m.attrs.changeId === changeId,
+          );
+          if (mark) positions.push({ from: pos, to: pos + node.nodeSize });
+        });
+        for (let i = positions.length - 1; i >= 0; i--) {
+          tr.delete(positions[i].from, positions[i].to);
         }
-      });
-
-      // Remove in reverse order to preserve positions
-      for (let i = positionsToRemove.length - 1; i >= 0; i--) {
-        tr.delete(positionsToRemove[i].from, positionsToRemove[i].to);
-      }
-
-      if (positionsToRemove.length > 0) {
-        editor.view.dispatch(tr);
+        if (positions.length > 0) editor.view.dispatch(tr);
       } else {
-        // If it's a deletion mark, just remove the mark (text reappears)
+        // Reject deletion: remove the mark, keep the text (un-delete)
         editor.chain().focus().unsetMarkovDelete(changeId).run();
       }
-
       removeChange(changeId);
     },
-    [editor, removeChange],
+    [editor, changes, removeChange],
   );
 
   // Accept/reject all

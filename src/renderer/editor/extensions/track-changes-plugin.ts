@@ -1,6 +1,5 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import type { Transaction } from '@tiptap/pm/state';
 import { nanoid } from 'nanoid';
 
 export const trackChangesPluginKey = new PluginKey('trackChanges');
@@ -31,7 +30,7 @@ export const TrackChangesPlugin = Extension.create({
           init(): TrackChangesPluginState {
             return { enabled: false, author: 'User' };
           },
-          apply(_tr, value): TrackChangesPluginState {
+          apply(): TrackChangesPluginState {
             return {
               enabled: extension.storage.enabled,
               author: extension.storage.author,
@@ -39,7 +38,7 @@ export const TrackChangesPlugin = Extension.create({
           },
         },
 
-        appendTransaction(transactions, _oldState, newState) {
+        appendTransaction(transactions, oldState, newState) {
           if (!extension.storage.enabled) return null;
 
           // Only intercept user-initiated transactions with doc changes
@@ -54,35 +53,44 @@ export const TrackChangesPlugin = Extension.create({
           tr.setMeta('trackChangesProcessed', true);
 
           let hasChanges = false;
+          let insertionOffset = 0;
 
-          // Walk through the steps to find insertions and deletions
-          userTx.steps.forEach((step, index) => {
-            const stepMap = step.getMap();
-            stepMap.forEach((oldStart, oldEnd, newStart, newEnd) => {
-              const changeId = nanoid(8);
+          userTx.steps.forEach((step) => {
+            step.getMap().forEach((oldStart, oldEnd, newStart, newEnd) => {
+              const adjNewStart = newStart + insertionOffset;
+              const adjNewEnd = newEnd + insertionOffset;
 
-              // Text was inserted
-              if (newEnd > newStart && oldEnd === oldStart) {
+              // Text was inserted (new content in the diff range)
+              if (newEnd > newStart) {
+                const changeId = nanoid(8);
                 const insertMark = newState.schema.marks.markovInsert.create({
                   changeId,
                   author,
                   date,
                 });
-                tr.addMark(newStart, newEnd, insertMark);
+                tr.addMark(adjNewStart, adjNewEnd, insertMark);
                 hasChanges = true;
               }
 
-              // Text was deleted — we can't easily re-insert deleted text in appendTransaction
-              // Instead, we handle deletions by converting them to delete marks before the deletion happens
-              // For now, just mark any replacement as insert (the old text is already gone)
-              if (newEnd > newStart && oldEnd > oldStart) {
-                const insertMark = newState.schema.marks.markovInsert.create({
-                  changeId,
-                  author,
-                  date,
-                });
-                tr.addMark(newStart, newEnd, insertMark);
-                hasChanges = true;
+              // Text was deleted (old content was removed)
+              if (oldEnd > oldStart) {
+                try {
+                  const deletedText = oldState.doc.textBetween(oldStart, oldEnd, '\n');
+                  if (deletedText) {
+                    const changeId = nanoid(8);
+                    const deleteMark = newState.schema.marks.markovDelete.create({
+                      changeId,
+                      author,
+                      date,
+                    });
+                    const textNode = newState.schema.text(deletedText, [deleteMark]);
+                    tr.insert(adjNewEnd, textNode);
+                    insertionOffset += deletedText.length;
+                    hasChanges = true;
+                  }
+                } catch {
+                  // Skip if can't read deleted text (e.g., structural changes)
+                }
               }
             });
           });

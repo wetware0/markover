@@ -89,6 +89,41 @@ export function markdownToHtml(markdown: string): string {
   }
 
   html += md.render(body);
+
+  // Convert inline markover HTML comments to elements TipTap can parse
+  html = html.replace(
+    /&lt;!-- markover:hl-start id=&quot;([^&]*)&quot; --&gt;/g,
+    '<span data-comment-id="$1">',
+  );
+  html = html.replace(/&lt;!-- markover:hl-end id=&quot;[^&]*&quot; --&gt;/g, '</span>');
+  html = html.replace(
+    /&lt;!-- markover:ins-start id=&quot;([^&]*)&quot; author=&quot;([^&]*)&quot; date=&quot;([^&]*)&quot; --&gt;/g,
+    '<ins data-change-id="$1" data-author="$2" data-date="$3">',
+  );
+  html = html.replace(/&lt;!-- markover:ins-end id=&quot;[^&]*&quot; --&gt;/g, '</ins>');
+  html = html.replace(
+    /&lt;!-- markover:del-start id=&quot;([^&]*)&quot; author=&quot;([^&]*)&quot; date=&quot;([^&]*)&quot; --&gt;/g,
+    '<del data-change-id="$1" data-author="$2" data-date="$3">',
+  );
+  html = html.replace(/&lt;!-- markover:del-end id=&quot;[^&]*&quot; --&gt;/g, '</del>');
+
+  // Also handle raw HTML comments (not entity-encoded)
+  html = html.replace(
+    /<!-- markover:hl-start id="([^"]*)" -->/g,
+    '<span data-comment-id="$1">',
+  );
+  html = html.replace(/<!-- markover:hl-end id="[^"]*" -->/g, '</span>');
+  html = html.replace(
+    /<!-- markover:ins-start id="([^"]*)" author="([^"]*)" date="([^"]*)" -->/g,
+    '<ins data-change-id="$1" data-author="$2" data-date="$3">',
+  );
+  html = html.replace(/<!-- markover:ins-end id="[^"]*" -->/g, '</ins>');
+  html = html.replace(
+    /<!-- markover:del-start id="([^"]*)" author="([^"]*)" date="([^"]*)" -->/g,
+    '<del data-change-id="$1" data-author="$2" data-date="$3">',
+  );
+  html = html.replace(/<!-- markover:del-end id="[^"]*" -->/g, '</del>');
+
   return html;
 }
 

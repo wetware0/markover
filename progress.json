@@ -47,30 +47,30 @@
     {
       "id": "phase-4",
       "name": "Comments System",
-      "status": "in-progress",
+      "status": "done",
       "tasks": [
         { "id": "4.1", "name": "Comment store (Zustand)", "status": "done" },
         { "id": "4.2", "name": "Comments sidebar panel with threads", "status": "done" },
         { "id": "4.3", "name": "Comment highlight marks in editor", "status": "done" },
         { "id": "4.4", "name": "Comment status (open/resolved/pending)", "status": "done" },
-        { "id": "4.5", "name": "Fix highlight offset tracking", "status": "not-started", "notes": "App.tsx hardcodes startOffset:0, endOffset:0. Offsets must be calculated from editor selection." },
-        { "id": "4.6", "name": "Comment metadata round-tripping via codec", "status": "in-progress", "notes": "Codec parser/serializer exist but broken due to offset issue." }
+        { "id": "4.5", "name": "Fix highlight offset tracking", "status": "done", "notes": "Replaced offset-based approach with inline markers in markdown. Marks serialize as HTML comments and parse back via markdown-it post-processing." },
+        { "id": "4.6", "name": "Comment metadata round-tripping via codec", "status": "done", "notes": "Highlights embedded inline in markdown. Codec only handles comment thread metadata." }
       ]
     },
     {
       "id": "phase-5",
       "name": "Track Changes",
-      "status": "in-progress",
+      "status": "done",
       "tasks": [
         { "id": "5.1", "name": "Track changes store (Zustand)", "status": "done" },
         { "id": "5.2", "name": "Insert mark extension", "status": "done" },
         { "id": "5.3", "name": "Delete mark extension", "status": "done" },
         { "id": "5.4", "name": "Track changes sidebar panel (accept/reject UI)", "status": "done" },
         { "id": "5.5", "name": "Plugin intercepting transactions for insertions", "status": "done" },
-        { "id": "5.6", "name": "Deletion tracking in plugin", "status": "not-started", "notes": "Plugin cannot properly track deletions. Code comment: 'we can't easily re-insert deleted text in appendTransaction'." },
-        { "id": "5.7", "name": "Track change marks serialized to markdown", "status": "not-started", "notes": "Serializer has no handlers for markovInsert/markovDelete marks." },
-        { "id": "5.8", "name": "Track change marks parsed from markdown", "status": "not-started", "notes": "Parser does not restore marks from codec metadata." },
-        { "id": "5.9", "name": "Accept/reject functionality", "status": "in-progress", "notes": "UI exists but full round-trip not working." }
+        { "id": "5.6", "name": "Deletion tracking in plugin", "status": "done", "notes": "Plugin reads deleted text from oldState and re-inserts with markovDelete mark." },
+        { "id": "5.7", "name": "Track change marks serialized to markdown", "status": "done", "notes": "Serializer emits inline HTML comments for markovInsert/markovDelete marks." },
+        { "id": "5.8", "name": "Track change marks parsed from markdown", "status": "done", "notes": "Parser post-processes HTML comments to ins/del elements, TipTap parseHTML picks them up." },
+        { "id": "5.9", "name": "Accept/reject functionality", "status": "done", "notes": "Accept insertion keeps text, accept deletion removes it. Reject insertion removes text, reject deletion keeps it. Transactions flagged with trackChangesProcessed." }
       ]
     },
     {
@@ -90,7 +90,8 @@
       "status": "done",
       "tasks": [
         { "id": "7.1", "name": "PDF export via Electron printToPDF", "status": "done" },
-        { "id": "7.2", "name": "Print support", "status": "done" }
+        { "id": "7.2", "name": "Print support", "status": "done" },
+        { "id": "7.3", "name": "Publish: export clean markdown without markover metadata", "status": "not-started", "notes": "File > Publish saves plain markdown (no HTML comments, no comment blocks) to a new file. Strips all markover markers, accepts all track changes, removes comment highlights." }
       ]
     },
     {

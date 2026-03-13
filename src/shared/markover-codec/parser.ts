@@ -1,14 +1,8 @@
 import type {
   ParseResult,
   MarkovMetadata,
-  RawMarker,
-  MarkerType,
-  Highlight,
-  Comment,
   CommentReply,
   CommentStatus,
-  TrackedInsertion,
-  TrackedDeletion,
   FileMeta,
   Author,
 } from './schema';
@@ -24,9 +18,6 @@ import type {
  *   Some content here
  *   <!-- /markover:comment -->
  */
-const INLINE_MARKER_RE =
-  /<!--\s*(?:\/?)markover:(hl-start|hl-end|ins-start|ins-end|del-start|del-end)\s+([^>]*?)-->/g;
-
 const COMMENT_BLOCK_RE =
   /<!--\s*markover:comment\s+([^>]*?)-->\n?([\s\S]*?)<!--\s*\/markover:comment\s*-->/g;
 
@@ -101,33 +92,9 @@ export function parseMarkoverFile(source: string): ParseResult {
     });
   }
 
-  // 3. Extract inline markers (highlights, insertions, deletions)
-  INLINE_MARKER_RE.lastIndex = 0;
-  let inlineMatch: RegExpExecArray | null;
-  const pendingStarts = new Map<string, { type: string; attrs: Record<string, string>; cleanOffset: number }>();
-
-  // We need to compute clean offsets as we go, so first collect all inline markers
-  const inlineMarkers: Array<{
-    type: string;
-    attrs: Record<string, string>;
-    sourceStart: number;
-    sourceEnd: number;
-  }> = [];
-
-  while ((inlineMatch = INLINE_MARKER_RE.exec(source)) !== null) {
-    const type = inlineMatch[1];
-    const attrs = parseAttrs(inlineMatch[2]);
-    inlineMarkers.push({
-      type,
-      attrs,
-      sourceStart: inlineMatch.index,
-      sourceEnd: inlineMatch.index + inlineMatch[0].length,
-    });
-    stripRegions.push({
-      start: inlineMatch.index,
-      end: inlineMatch.index + inlineMatch[0].length,
-    });
-  }
+  // Inline markers (hl-start/end, ins-start/end, del-start/end) are intentionally
+  // NOT stripped — they remain in the markdown and are parsed by the markdown-it
+  // post-processor into HTML elements that TipTap picks up as marks.
 
   // Sort strip regions by start position
   stripRegions.sort((a, b) => a.start - b.start);
@@ -157,70 +124,7 @@ export function parseMarkoverFile(source: string): ParseResult {
   // Trim trailing whitespace from stripping
   cleanMarkdown = cleanMarkdown.replace(/\n{3,}/g, '\n\n').trim() + '\n';
 
-  // Now resolve inline markers into highlights/insertions/deletions using clean offsets
-  for (const marker of inlineMarkers) {
-    const cleanOffset = sourceToCleanOffset(marker.sourceStart, offsetMap);
-    const id = marker.attrs.id || '';
-
-    if (marker.type.endsWith('-start')) {
-      pendingStarts.set(`${marker.type.replace('-start', '')}:${id}`, {
-        type: marker.type.replace('-start', ''),
-        attrs: marker.attrs,
-        cleanOffset,
-      });
-    } else if (marker.type.endsWith('-end')) {
-      const key = `${marker.type.replace('-end', '')}:${id}`;
-      const start = pendingStarts.get(key);
-      if (start) {
-        const endCleanOffset = sourceToCleanOffset(marker.sourceStart, offsetMap);
-
-        switch (start.type) {
-          case 'hl':
-            metadata.highlights.push({
-              id,
-              startOffset: start.cleanOffset,
-              endOffset: endCleanOffset,
-            });
-            break;
-          case 'ins':
-            metadata.insertions.push({
-              id,
-              author: start.attrs.author || '',
-              date: start.attrs.date || '',
-              startOffset: start.cleanOffset,
-              endOffset: endCleanOffset,
-            });
-            break;
-          case 'del':
-            metadata.deletions.push({
-              id,
-              author: start.attrs.author || '',
-              date: start.attrs.date || '',
-              startOffset: start.cleanOffset,
-              endOffset: endCleanOffset,
-            });
-            break;
-        }
-        pendingStarts.delete(key);
-      }
-    }
-  }
-
   return { cleanMarkdown, metadata };
-}
-
-/** Convert a source offset to a clean markdown offset */
-function sourceToCleanOffset(
-  srcOffset: number,
-  offsetMap: Array<{ srcStart: number; cleanStart: number; length: number }>,
-): number {
-  for (let i = offsetMap.length - 1; i >= 0; i--) {
-    const entry = offsetMap[i];
-    if (srcOffset >= entry.srcStart && srcOffset <= entry.srcStart + entry.length) {
-      return entry.cleanStart + (srcOffset - entry.srcStart);
-    }
-  }
-  return 0;
 }
 
 /** Parse key="value" pairs from an attribute string */

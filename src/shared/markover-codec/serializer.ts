@@ -1,76 +1,19 @@
 import type {
   MarkovMetadata,
   Comment,
-  Highlight,
-  TrackedInsertion,
-  TrackedDeletion,
   FileMeta,
 } from './schema';
 
 /**
- * Inject markover metadata back into clean markdown.
- * Inserts HTML comment markers at the correct positions.
+ * Serialize markover metadata into a markdown file.
+ * Inline markers (highlights, insertions, deletions) are already embedded
+ * in the markdown by the ProseMirror serializer. This function only appends
+ * comment blocks and file-level metadata.
  */
-export function serializeMarkoverFile(cleanMarkdown: string, metadata: MarkovMetadata): string {
-  // Collect all insertions to make, sorted by offset (descending so we can insert back-to-front)
-  const insertions: Array<{ offset: number; text: string; priority: number }> = [];
+export function serializeMarkoverFile(markdown: string, metadata: MarkovMetadata): string {
+  let result = markdown;
 
-  // Inline markers for highlights
-  for (const hl of metadata.highlights) {
-    insertions.push({
-      offset: hl.startOffset,
-      text: `<!-- markover:hl-start id="${hl.id}" -->`,
-      priority: 0,
-    });
-    insertions.push({
-      offset: hl.endOffset,
-      text: `<!-- markover:hl-end id="${hl.id}" -->`,
-      priority: 1,
-    });
-  }
-
-  // Inline markers for tracked insertions
-  for (const ins of metadata.insertions) {
-    insertions.push({
-      offset: ins.startOffset,
-      text: `<!-- markover:ins-start id="${ins.id}" author="${ins.author}" date="${ins.date}" -->`,
-      priority: 0,
-    });
-    insertions.push({
-      offset: ins.endOffset,
-      text: `<!-- markover:ins-end id="${ins.id}" -->`,
-      priority: 1,
-    });
-  }
-
-  // Inline markers for tracked deletions
-  for (const del of metadata.deletions) {
-    insertions.push({
-      offset: del.startOffset,
-      text: `<!-- markover:del-start id="${del.id}" author="${del.author}" date="${del.date}" -->`,
-      priority: 0,
-    });
-    insertions.push({
-      offset: del.endOffset,
-      text: `<!-- markover:del-end id="${del.id}" -->`,
-      priority: 1,
-    });
-  }
-
-  // Sort descending by offset, then by priority (end markers before start markers at same offset)
-  insertions.sort((a, b) => {
-    if (b.offset !== a.offset) return b.offset - a.offset;
-    return b.priority - a.priority;
-  });
-
-  // Insert markers back-to-front so offsets remain valid
-  let result = cleanMarkdown;
-  for (const ins of insertions) {
-    result = result.slice(0, ins.offset) + ins.text + result.slice(ins.offset);
-  }
-
-  // Append comment blocks after the paragraphs they reference
-  // For simplicity, we append all comment blocks at the end before file meta
+  // Append comment blocks at the end before file meta
   if (metadata.comments.length > 0) {
     result = result.trimEnd() + '\n';
 
