@@ -35,7 +35,10 @@ const createWindow = () => {
     );
   }
 
-  Menu.setApplicationMenu(buildMenu(mainWindow));
+  Menu.setApplicationMenu(buildMenu(mainWindow, (filePath) => {
+    currentFilePath = filePath;
+    updateTitle();
+  }));
 
   // Enable spell checking
   session.defaultSession.setSpellCheckerLanguages(['en-US']);

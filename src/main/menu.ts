@@ -1,7 +1,9 @@
-import { Menu, BrowserWindow, type MenuItemConstructorOptions } from 'electron';
+import { Menu, BrowserWindow, dialog, type MenuItemConstructorOptions } from 'electron';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { IPC_CHANNELS } from '../shared/types/ipc';
 
-export function buildMenu(window: BrowserWindow): Menu {
+export function buildMenu(window: BrowserWindow, onFileOpened?: (filePath: string) => void): Menu {
   const sendAction = (action: string) => {
     window.webContents.send(IPC_CHANNELS.MENU_ACTION, action);
   };
@@ -18,7 +20,29 @@ export function buildMenu(window: BrowserWindow): Menu {
         {
           label: 'Open...',
           accelerator: 'CmdOrCtrl+O',
-          click: () => sendAction('open'),
+          click: async () => {
+            const result = await dialog.showOpenDialog(window, {
+              properties: ['openFile'],
+              filters: [
+                { name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd', 'mkdn'] },
+                { name: 'Text', extensions: ['txt'] },
+                { name: 'All Files', extensions: ['*'] },
+              ],
+            });
+            if (result.canceled || result.filePaths.length === 0) return;
+            const filePath = result.filePaths[0];
+            try {
+              const content = await fs.readFile(filePath, 'utf-8');
+              onFileOpened?.(filePath);
+              window.webContents.send(IPC_CHANNELS.FILE_CHANGED, {
+                filePath,
+                content,
+                fileName: path.basename(filePath),
+              });
+            } catch (err) {
+              console.error('Failed to read file:', err);
+            }
+          },
         },
         { type: 'separator' },
         {
