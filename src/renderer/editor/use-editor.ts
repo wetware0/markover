@@ -12,8 +12,10 @@ import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import { useEditorStore } from '../store/editor-store';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import type { Editor } from '@tiptap/core';
+import { markdownToHtml } from './markdown/parser';
+import { prosemirrorToMarkdown } from './markdown/serializer';
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -74,10 +76,11 @@ export function useMarkoverEditor() {
   });
 
   const loadContent = useCallback(
-    (content: string) => {
+    (markdown: string) => {
       if (!editor) return;
       isLoadingRef.current = true;
-      editor.commands.setContent(content);
+      const html = markdownToHtml(markdown);
+      editor.commands.setContent(html);
       isLoadingRef.current = false;
       setDirty(false);
     },
@@ -86,8 +89,7 @@ export function useMarkoverEditor() {
 
   const getMarkdown = useCallback((): string => {
     if (!editor) return '';
-    // For Phase 1, we serialize as HTML. Phase 3 will add proper markdown serialization.
-    return editor.getHTML();
+    return prosemirrorToMarkdown(editor.state.doc);
   }, [editor]);
 
   return { editor, loadContent, getMarkdown };
