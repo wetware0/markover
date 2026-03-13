@@ -244,3 +244,15 @@
   color: #4b5563;
   margin: 0.25em 0;
 }
+
+/* Markover comment highlights */
+.ProseMirror .markover-highlight {
+  background-color: rgba(255, 212, 59, 0.35);
+  border-bottom: 2px solid #f59e0b;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.ProseMirror .markover-highlight:hover {
+  background-color: rgba(255, 212, 59, 0.55);
+}

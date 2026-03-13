@@ -24,6 +24,7 @@ import { MermaidBlock } from './extensions/mermaid-block';
 import { FootnoteRef, FootnoteBlock } from './extensions/footnote';
 import { FrontMatter } from './extensions/front-matter';
 import { ImageDrop } from './extensions/image-drop';
+import { MarkovHighlight } from './extensions/markover-highlight';
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -81,6 +82,7 @@ export function useMarkoverEditor() {
       FootnoteBlock,
       FrontMatter,
       ImageDrop,
+      MarkovHighlight,
     ],
     content: '',
     onUpdate: ({ editor }) => {
@@ -121,5 +123,11 @@ export function useMarkoverEditor() {
     return serializeMarkoverFile(cleanMarkdown, metadataRef.current);
   }, [editor]);
 
-  return { editor, loadContent, getMarkdown };
+  const getMetadata = useCallback(() => metadataRef.current, []);
+
+  const setMetadata = useCallback((metadata: MarkovMetadata) => {
+    metadataRef.current = metadata;
+  }, []);
+
+  return { editor, loadContent, getMarkdown, getMetadata, setMetadata };
 }

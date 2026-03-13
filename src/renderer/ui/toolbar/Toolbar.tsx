@@ -20,10 +20,14 @@ import {
   Undo,
   Redo,
   Table,
+  MessageSquarePlus,
+  PanelRight,
 } from 'lucide-react';
 
 interface ToolbarProps {
   editor: Editor | null;
+  onAddComment?: () => void;
+  onToggleSidebar?: () => void;
 }
 
 interface ToolbarButtonProps {
@@ -54,7 +58,7 @@ function ToolbarDivider() {
   return <div className="w-px h-6 bg-gray-300 mx-1" />;
 }
 
-export function Toolbar({ editor }: ToolbarProps) {
+export function Toolbar({ editor, onAddComment, onToggleSidebar }: ToolbarProps) {
   if (!editor) return null;
 
   const iconSize = 18;
@@ -157,6 +161,24 @@ export function Toolbar({ editor }: ToolbarProps) {
         title="Insert Table"
       >
         <Table size={iconSize} />
+      </ToolbarButton>
+
+      <ToolbarDivider />
+
+      {/* Collaboration */}
+      <ToolbarButton
+        onClick={() => onAddComment?.()}
+        disabled={editor.state.selection.from === editor.state.selection.to}
+        title="Add Comment (select text first)"
+      >
+        <MessageSquarePlus size={iconSize} />
+      </ToolbarButton>
+
+      <div className="flex-1" />
+
+      {/* Sidebar toggle */}
+      <ToolbarButton onClick={() => onToggleSidebar?.()} title="Toggle Sidebar">
+        <PanelRight size={iconSize} />
       </ToolbarButton>
     </div>
   );
