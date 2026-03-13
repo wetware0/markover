@@ -22,12 +22,15 @@ import {
   Table,
   MessageSquarePlus,
   PanelRight,
+  GitCompare,
 } from 'lucide-react';
 
 interface ToolbarProps {
   editor: Editor | null;
   onAddComment?: () => void;
   onToggleSidebar?: () => void;
+  trackChangesEnabled?: boolean;
+  onToggleTrackChanges?: () => void;
 }
 
 interface ToolbarButtonProps {
@@ -58,7 +61,7 @@ function ToolbarDivider() {
   return <div className="w-px h-6 bg-gray-300 mx-1" />;
 }
 
-export function Toolbar({ editor, onAddComment, onToggleSidebar }: ToolbarProps) {
+export function Toolbar({ editor, onAddComment, onToggleSidebar, trackChangesEnabled, onToggleTrackChanges }: ToolbarProps) {
   if (!editor) return null;
 
   const iconSize = 18;
@@ -172,6 +175,13 @@ export function Toolbar({ editor, onAddComment, onToggleSidebar }: ToolbarProps)
         title="Add Comment (select text first)"
       >
         <MessageSquarePlus size={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={() => onToggleTrackChanges?.()}
+        isActive={trackChangesEnabled}
+        title={trackChangesEnabled ? 'Track Changes: ON' : 'Track Changes: OFF'}
+      >
+        <GitCompare size={iconSize} />
       </ToolbarButton>
 
       <div className="flex-1" />

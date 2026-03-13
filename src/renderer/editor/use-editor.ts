@@ -25,6 +25,9 @@ import { FootnoteRef, FootnoteBlock } from './extensions/footnote';
 import { FrontMatter } from './extensions/front-matter';
 import { ImageDrop } from './extensions/image-drop';
 import { MarkovHighlight } from './extensions/markover-highlight';
+import { MarkovInsert } from './extensions/markover-insert';
+import { MarkovDelete } from './extensions/markover-delete';
+import { TrackChangesPlugin } from './extensions/track-changes-plugin';
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -83,6 +86,9 @@ export function useMarkoverEditor() {
       FrontMatter,
       ImageDrop,
       MarkovHighlight,
+      MarkovInsert,
+      MarkovDelete,
+      TrackChangesPlugin,
     ],
     content: '',
     onUpdate: ({ editor }) => {

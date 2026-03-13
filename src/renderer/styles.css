@@ -256,3 +256,19 @@
 .ProseMirror .markover-highlight:hover {
   background-color: rgba(255, 212, 59, 0.55);
 }
+
+/* Track changes: insertions */
+.ProseMirror .markover-insert {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #166534;
+  text-decoration: none;
+  border-bottom: 2px solid #22c55e;
+}
+
+/* Track changes: deletions */
+.ProseMirror .markover-delete {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #991b1b;
+  text-decoration: line-through;
+  text-decoration-color: #ef4444;
+}
