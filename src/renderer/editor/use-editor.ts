@@ -16,6 +16,8 @@ import { useCallback, useRef } from 'react';
 import type { Editor } from '@tiptap/core';
 import { markdownToHtml } from './markdown/parser';
 import { prosemirrorToMarkdown } from './markdown/serializer';
+import { parseMarkoverFile, serializeMarkoverFile } from '../../shared/markover-codec';
+import type { MarkovMetadata } from '../../shared/markover-codec';
 import { KatexInline } from './extensions/katex-inline';
 import { KatexBlock } from './extensions/katex-block';
 import { MermaidBlock } from './extensions/mermaid-block';
@@ -30,6 +32,13 @@ function countWords(text: string): number {
 export function useMarkoverEditor() {
   const { setWordCount, setCursor, setDirty } = useEditorStore();
   const isLoadingRef = useRef(false);
+  const metadataRef = useRef<MarkovMetadata>({
+    highlights: [],
+    comments: [],
+    insertions: [],
+    deletions: [],
+    fileMeta: null,
+  });
 
   const updateStats = useCallback(
     (editor: Editor) => {
@@ -89,10 +98,15 @@ export function useMarkoverEditor() {
   });
 
   const loadContent = useCallback(
-    (markdown: string) => {
+    (rawMarkdown: string) => {
       if (!editor) return;
       isLoadingRef.current = true;
-      const html = markdownToHtml(markdown);
+
+      // Parse out markover metadata, get clean markdown
+      const { cleanMarkdown, metadata } = parseMarkoverFile(rawMarkdown);
+      metadataRef.current = metadata;
+
+      const html = markdownToHtml(cleanMarkdown);
       editor.commands.setContent(html);
       isLoadingRef.current = false;
       setDirty(false);
@@ -102,7 +116,9 @@ export function useMarkoverEditor() {
 
   const getMarkdown = useCallback((): string => {
     if (!editor) return '';
-    return prosemirrorToMarkdown(editor.state.doc);
+    const cleanMarkdown = prosemirrorToMarkdown(editor.state.doc);
+    // Re-inject metadata into the markdown
+    return serializeMarkoverFile(cleanMarkdown, metadataRef.current);
   }, [editor]);
 
   return { editor, loadContent, getMarkdown };
