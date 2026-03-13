@@ -18,6 +18,11 @@ const api: ElectronAPI = {
     ipcRenderer.on(IPC_CHANNELS.FILE_CHANGED, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.FILE_CHANGED, handler);
   },
+  spellcheckGetLanguages: () => ipcRenderer.invoke(IPC_CHANNELS.SPELLCHECK_GET_LANGUAGES),
+  spellcheckSetLanguages: (languages: string[]) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SPELLCHECK_SET_LANGUAGES, languages),
+  spellcheckAddWord: (word: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SPELLCHECK_ADD_WORD, word),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

@@ -17,6 +17,9 @@ export const IPC_CHANNELS = {
   FILE_CHANGED: 'file:changed',
   MENU_ACTION: 'menu:action',
   GET_WORD_COUNT: 'editor:word-count',
+  SPELLCHECK_GET_LANGUAGES: 'spellcheck:get-languages',
+  SPELLCHECK_SET_LANGUAGES: 'spellcheck:set-languages',
+  SPELLCHECK_ADD_WORD: 'spellcheck:add-word',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -28,6 +31,9 @@ export interface ElectronAPI {
   newFile: () => void;
   onMenuAction: (callback: (action: string) => void) => () => void;
   onFileChanged: (callback: (data: FileData) => void) => () => void;
+  spellcheckGetLanguages: () => Promise<string[]>;
+  spellcheckSetLanguages: (languages: string[]) => Promise<void>;
+  spellcheckAddWord: (word: string) => Promise<void>;
 }
 
 declare global {

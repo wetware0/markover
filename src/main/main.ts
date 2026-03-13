@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, session } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import started from 'electron-squirrel-startup';
@@ -23,6 +23,7 @@ const createWindow = () => {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      spellcheck: true,
     },
   });
 
@@ -35,6 +36,40 @@ const createWindow = () => {
   }
 
   Menu.setApplicationMenu(buildMenu(mainWindow));
+
+  // Enable spell checking
+  session.defaultSession.setSpellCheckerLanguages(['en-US']);
+
+  // Handle spell check context menu
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    if (params.misspelledWord) {
+      const menuItems: Electron.MenuItemConstructorOptions[] = [];
+
+      for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
+        menuItems.push({
+          label: suggestion,
+          click: () => mainWindow?.webContents.replaceMisspelling(suggestion),
+        });
+      }
+
+      if (menuItems.length > 0) {
+        menuItems.push({ type: 'separator' });
+      }
+
+      menuItems.push({
+        label: 'Add to Dictionary',
+        click: () => mainWindow?.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      });
+
+      menuItems.push({ type: 'separator' });
+      menuItems.push({ role: 'cut' });
+      menuItems.push({ role: 'copy' });
+      menuItems.push({ role: 'paste' });
+
+      const contextMenu = Menu.buildFromTemplate(menuItems);
+      contextMenu.popup();
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -106,6 +141,19 @@ ipcMain.handle(IPC_CHANNELS.FILE_SAVE_AS, async (_event, content: string) => {
   } catch {
     return null;
   }
+});
+
+// Spellcheck IPC
+ipcMain.handle(IPC_CHANNELS.SPELLCHECK_GET_LANGUAGES, () => {
+  return session.defaultSession.getSpellCheckerLanguages();
+});
+
+ipcMain.handle(IPC_CHANNELS.SPELLCHECK_SET_LANGUAGES, (_event, languages: string[]) => {
+  session.defaultSession.setSpellCheckerLanguages(languages);
+});
+
+ipcMain.handle(IPC_CHANNELS.SPELLCHECK_ADD_WORD, (_event, word: string) => {
+  session.defaultSession.addWordToSpellCheckerDictionary(word);
 });
 
 app.on('ready', createWindow);
