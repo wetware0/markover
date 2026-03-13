@@ -1,0 +1,156 @@
+{
+  "project": "Markover",
+  "description": "Markdown WYSIWYG editor with Word-like collaboration features",
+  "lastUpdated": "2026-03-14",
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Foundation MVP",
+      "status": "done",
+      "tasks": [
+        { "id": "1.1", "name": "Electron + Vite + React scaffold", "status": "done" },
+        { "id": "1.2", "name": "TipTap editor with formatting extensions", "status": "done" },
+        { "id": "1.3", "name": "Toolbar with formatting buttons", "status": "done" },
+        { "id": "1.4", "name": "Status bar (word count, cursor position)", "status": "done" },
+        { "id": "1.5", "name": "File open/save/save-as via IPC", "status": "done" },
+        { "id": "1.6", "name": "Native application menu", "status": "done" }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "Advanced Markdown",
+      "status": "in-progress",
+      "tasks": [
+        { "id": "2.1", "name": "Markdown round-tripping (parser + serializer)", "status": "done" },
+        { "id": "2.2", "name": "KaTeX inline/block rendering", "status": "done" },
+        { "id": "2.3", "name": "KaTeX inline/block WYSIWYG editing", "status": "not-started", "notes": "Currently view-only, atom:true, contentEditable:false. Need click-to-edit dialog or inline source editing." },
+        { "id": "2.4", "name": "Mermaid diagram rendering", "status": "done" },
+        { "id": "2.5", "name": "Mermaid diagram WYSIWYG editing", "status": "not-started", "notes": "Currently view-only, atom:true, contentEditable:false. Need click-to-edit dialog with live preview." },
+        { "id": "2.6", "name": "Footnotes", "status": "done" },
+        { "id": "2.7", "name": "YAML front matter", "status": "done" },
+        { "id": "2.8", "name": "Image drop/paste insertion", "status": "done" },
+        { "id": "2.9", "name": "Image resize UI and alt-text editing", "status": "not-started", "notes": "No drag handles or alt-text editing UI." },
+        { "id": "2.10", "name": "Table editing", "status": "done" }
+      ]
+    },
+    {
+      "id": "phase-3",
+      "name": "Markover Codec",
+      "status": "done",
+      "tasks": [
+        { "id": "3.1", "name": "Schema for metadata types", "status": "done" },
+        { "id": "3.2", "name": "Parser (extract metadata from markdown)", "status": "done" },
+        { "id": "3.3", "name": "Serializer (inject metadata into markdown)", "status": "done" },
+        { "id": "3.4", "name": "Validator", "status": "done" }
+      ]
+    },
+    {
+      "id": "phase-4",
+      "name": "Comments System",
+      "status": "in-progress",
+      "tasks": [
+        { "id": "4.1", "name": "Comment store (Zustand)", "status": "done" },
+        { "id": "4.2", "name": "Comments sidebar panel with threads", "status": "done" },
+        { "id": "4.3", "name": "Comment highlight marks in editor", "status": "done" },
+        { "id": "4.4", "name": "Comment status (open/resolved/pending)", "status": "done" },
+        { "id": "4.5", "name": "Fix highlight offset tracking", "status": "not-started", "notes": "App.tsx hardcodes startOffset:0, endOffset:0. Offsets must be calculated from editor selection." },
+        { "id": "4.6", "name": "Comment metadata round-tripping via codec", "status": "in-progress", "notes": "Codec parser/serializer exist but broken due to offset issue." }
+      ]
+    },
+    {
+      "id": "phase-5",
+      "name": "Track Changes",
+      "status": "in-progress",
+      "tasks": [
+        { "id": "5.1", "name": "Track changes store (Zustand)", "status": "done" },
+        { "id": "5.2", "name": "Insert mark extension", "status": "done" },
+        { "id": "5.3", "name": "Delete mark extension", "status": "done" },
+        { "id": "5.4", "name": "Track changes sidebar panel (accept/reject UI)", "status": "done" },
+        { "id": "5.5", "name": "Plugin intercepting transactions for insertions", "status": "done" },
+        { "id": "5.6", "name": "Deletion tracking in plugin", "status": "not-started", "notes": "Plugin cannot properly track deletions. Code comment: 'we can't easily re-insert deleted text in appendTransaction'." },
+        { "id": "5.7", "name": "Track change marks serialized to markdown", "status": "not-started", "notes": "Serializer has no handlers for markovInsert/markovDelete marks." },
+        { "id": "5.8", "name": "Track change marks parsed from markdown", "status": "not-started", "notes": "Parser does not restore marks from codec metadata." },
+        { "id": "5.9", "name": "Accept/reject functionality", "status": "in-progress", "notes": "UI exists but full round-trip not working." }
+      ]
+    },
+    {
+      "id": "phase-6",
+      "name": "Spell Checking",
+      "status": "in-progress",
+      "tasks": [
+        { "id": "6.1", "name": "Electron Hunspell spell check", "status": "done" },
+        { "id": "6.2", "name": "Context menu with suggestions", "status": "done" },
+        { "id": "6.3", "name": "Add to dictionary", "status": "done" },
+        { "id": "6.4", "name": "cspell exception support in markdown", "status": "not-started", "notes": "Requirement: user can place cspell exception comment in markdown to override spelling. Not implemented." }
+      ]
+    },
+    {
+      "id": "phase-7",
+      "name": "Print and Export",
+      "status": "done",
+      "tasks": [
+        { "id": "7.1", "name": "PDF export via Electron printToPDF", "status": "done" },
+        { "id": "7.2", "name": "Print support", "status": "done" }
+      ]
+    },
+    {
+      "id": "phase-8",
+      "name": "Highlighting",
+      "status": "in-progress",
+      "tasks": [
+        { "id": "8.1", "name": "General-purpose text highlighting (==...== syntax)", "status": "in-progress", "notes": "TipTap Highlight extension configured, serializer has == wrapper, but no dedicated toolbar button. Currently only used via comment system." },
+        { "id": "8.2", "name": "Toolbar button for standalone highlighting", "status": "not-started" }
+      ]
+    },
+    {
+      "id": "phase-9",
+      "name": "E2E Testing",
+      "status": "in-progress",
+      "tasks": [
+        { "id": "9.1", "name": "Install Playwright with Electron support", "status": "done" },
+        { "id": "9.2", "name": "Test harness and fixtures", "status": "done" },
+        { "id": "9.3", "name": "E2E tests for core editing features", "status": "done" },
+        { "id": "9.4", "name": "E2E tests for comments", "status": "not-started" },
+        { "id": "9.5", "name": "E2E tests for track changes", "status": "not-started" },
+        { "id": "9.6", "name": "E2E tests for mermaid/KaTeX/tables", "status": "not-started" },
+        { "id": "9.7", "name": "E2E tests for file save/load round-tripping", "status": "not-started" }
+      ]
+    },
+    {
+      "id": "phase-10",
+      "name": "Raw Edit Mode",
+      "status": "not-started",
+      "tasks": [
+        { "id": "10.1", "name": "Toggle between WYSIWYG and raw markdown editing", "status": "not-started", "notes": "Split or tab view showing raw markdown source. Edits in either view sync to the other." },
+        { "id": "10.2", "name": "Syntax-highlighted raw editor (CodeMirror or Monaco)", "status": "not-started" },
+        { "id": "10.3", "name": "Toolbar/status bar indicator for current mode", "status": "not-started" }
+      ]
+    },
+    {
+      "id": "phase-11",
+      "name": "Light/Dark Mode",
+      "status": "done",
+      "tasks": [
+        { "id": "11.1", "name": "Theme store and system preference detection", "status": "done" },
+        { "id": "11.2", "name": "Dark mode CSS variables and Tailwind dark classes", "status": "done" },
+        { "id": "11.3", "name": "Theme toggle in toolbar or menu", "status": "done" },
+        { "id": "11.4", "name": "Persist theme preference", "status": "done" }
+      ]
+    },
+    {
+      "id": "phase-12",
+      "name": "User Guide",
+      "status": "not-started",
+      "tasks": [
+        { "id": "12.1", "name": "User guide content (features, usage, shortcuts)", "status": "not-started" },
+        { "id": "12.2", "name": "In-app help or bundled guide", "status": "not-started" }
+      ]
+    }
+  ],
+  "statusLegend": {
+    "done": "Complete and working",
+    "in-progress": "Partially implemented, has known gaps",
+    "not-started": "Not yet implemented",
+    "blocked": "Blocked by another task"
+  }
+}
