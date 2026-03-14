@@ -43,6 +43,7 @@ export function useMarkoverEditor() {
     insertions: [],
     deletions: [],
     fileMeta: null,
+    cspellIgnores: [],
   });
 
   const updateStats = useCallback(

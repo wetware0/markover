@@ -13,6 +13,12 @@ import type {
 export function serializeMarkoverFile(markdown: string, metadata: MarkovMetadata): string {
   let result = markdown;
 
+  // Prepend cspell:ignore comment if there are any ignored words
+  if (metadata.cspellIgnores && metadata.cspellIgnores.length > 0) {
+    const deduped = [...new Set(metadata.cspellIgnores)];
+    result = `<!-- cspell:ignore ${deduped.join(' ')} -->\n\n` + result;
+  }
+
   // Append comment blocks at the end before file meta
   if (metadata.comments.length > 0) {
     result = result.trimEnd() + '\n';

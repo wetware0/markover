@@ -27,6 +27,9 @@ const REPLY_RE =
 const META_BLOCK_RE =
   /<!--\s*markover:meta\n([\s\S]*?)-->/g;
 
+const CSPELL_IGNORE_RE =
+  /<!--\s*cspell\s*:\s*ignore\s+([^>]+?)-->/gi;
+
 /**
  * Parse a markdown file containing markover metadata.
  * Returns clean markdown (with all markover comments stripped) and extracted metadata.
@@ -38,6 +41,7 @@ export function parseMarkoverFile(source: string): ParseResult {
     insertions: [],
     deletions: [],
     fileMeta: null,
+    cspellIgnores: [],
   };
 
   // Track all marker regions to strip from source
@@ -51,7 +55,16 @@ export function parseMarkoverFile(source: string): ParseResult {
     stripRegions.push({ start: metaMatch.index, end: metaMatch.index + metaMatch[0].length });
   }
 
-  // 2. Extract comment blocks (including replies)
+  // 2. Extract cspell:ignore comments (strip from rendered markdown, preserve words)
+  CSPELL_IGNORE_RE.lastIndex = 0;
+  let cspellMatch: RegExpExecArray | null;
+  while ((cspellMatch = CSPELL_IGNORE_RE.exec(source)) !== null) {
+    const words = cspellMatch[1].trim().split(/\s+/).filter(Boolean);
+    metadata.cspellIgnores.push(...words);
+    stripRegions.push({ start: cspellMatch.index, end: cspellMatch.index + cspellMatch[0].length });
+  }
+
+  // 3. Extract comment blocks (including replies)
   COMMENT_BLOCK_RE.lastIndex = 0;
   let commentMatch: RegExpExecArray | null;
   while ((commentMatch = COMMENT_BLOCK_RE.exec(source)) !== null) {
@@ -92,7 +105,7 @@ export function parseMarkoverFile(source: string): ParseResult {
     });
   }
 
-  // Inline markers (hl-start/end, ins-start/end, del-start/end) are intentionally
+  // 4. Inline markers (hl-start/end, ins-start/end, del-start/end) are intentionally
   // NOT stripped — they remain in the markdown and are parsed by the markdown-it
   // post-processor into HTML elements that TipTap picks up as marks.
 

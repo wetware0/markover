@@ -70,6 +70,8 @@ export interface MarkovMetadata {
   insertions: TrackedInsertion[];
   deletions: TrackedDeletion[];
   fileMeta: FileMeta | null;
+  /** Words declared via <!-- cspell:ignore word1 word2 --> */
+  cspellIgnores: string[];
 }
 
 /** Result of parsing: clean markdown + extracted metadata */

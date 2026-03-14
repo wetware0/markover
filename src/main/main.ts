@@ -128,6 +128,13 @@ const createWindow = async () => {
         label: 'Add to Dictionary',
         click: () => mainWindow?.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
       });
+      menuItems.push({
+        label: 'Ignore in this document',
+        click: () => mainWindow?.webContents.send(
+          IPC_CHANNELS.MENU_ACTION,
+          `cspell-ignore:${params.misspelledWord}`,
+        ),
+      });
 
       menuItems.push({ type: 'separator' });
       menuItems.push({ role: 'cut' });

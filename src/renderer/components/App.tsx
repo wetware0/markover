@@ -162,8 +162,8 @@ export function App() {
       syncCommentsToMetadata();
       rawMd = getMarkdown();
     }
-    // Strip markover comment blocks at the end of the file
-    const { cleanMarkdown } = parseMarkoverFile(rawMd);
+    // Strip markover comment blocks; extract cspell ignores
+    const { cleanMarkdown, metadata } = parseMarkoverFile(rawMd);
     // Accept insertions (keep text), remove comment highlights (keep text)
     let published = cleanMarkdown.replace(
       /<span data-markov="(?:ins|hl)"[^>]*>([\s\S]*?)<\/span>/g,
@@ -171,6 +171,11 @@ export function App() {
     );
     // Accept deletions (remove text)
     published = published.replace(/<span data-markov="del"[^>]*>[\s\S]*?<\/span>/g, '');
+    // Preserve cspell:ignore words in the published file
+    if (metadata.cspellIgnores.length > 0) {
+      const deduped = [...new Set(metadata.cspellIgnores)];
+      published = `<!-- cspell:ignore ${deduped.join(' ')} -->\n\n` + published;
+    }
     await window.electronAPI.saveFileAs(published);
   }, [isRawMode, getMarkdown, syncCommentsToMetadata]);
 
@@ -377,6 +382,13 @@ export function App() {
     setNodeEdit(null);
   }, [nodeEdit, editor]);
 
+  // Add cspell ignore words to the session spell checker
+  const applyCspellIgnores = useCallback((meta: ReturnType<typeof getMetadata>) => {
+    for (const word of meta.cspellIgnores ?? []) {
+      window.electronAPI.spellcheckAddWord(word);
+    }
+  }, []);
+
   // Handle file opened from main process (File > Open menu)
   useEffect(() => {
     const unsubscribe = window.electronAPI.onFileChanged((data) => {
@@ -386,9 +398,10 @@ export function App() {
       setFile(data.filePath, data.fileName);
       const meta = getMetadata();
       setComments(meta.comments);
+      applyCspellIgnores(meta);
     });
     return unsubscribe;
-  }, [loadContent, setFile, getMetadata, setComments, setRawMode]);
+  }, [loadContent, setFile, getMetadata, setComments, setRawMode, applyCspellIgnores]);
 
   // Handle menu actions
   useEffect(() => {
@@ -403,7 +416,9 @@ export function App() {
               rawContentRef.current = '';
               loadContent(data.content);
               setFile(data.filePath, data.fileName);
-              setComments(getMetadata().comments);
+              const meta = getMetadata();
+              setComments(meta.comments);
+              applyCspellIgnores(meta);
             }
           };
           guardDirty('You have unsaved changes. Open a different file anyway?', () => { void doOpen(); });
@@ -436,6 +451,18 @@ export function App() {
         }
         case 'publish': handlePublish(); break;
         case 'help': setHelpOpen(true); break;
+        default:
+          if (action.startsWith('cspell-ignore:')) {
+            const word = action.slice('cspell-ignore:'.length);
+            const meta = getMetadata();
+            if (!meta.cspellIgnores.includes(word)) {
+              meta.cspellIgnores.push(word);
+              setMetadata(meta);
+            }
+            window.electronAPI.spellcheckAddWord(word);
+            setDirty(true);
+          }
+          break;
         case 'print':
           // Switch to WYSIWYG first so TipTap's rendered view is printed
           if (isRawMode) handleToggleRawMode();

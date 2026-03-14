@@ -80,12 +80,12 @@
     {
       "id": "phase-6",
       "name": "Spell Checking",
-      "status": "in-progress",
+      "status": "done",
       "tasks": [
         { "id": "6.1", "name": "Electron Hunspell spell check", "status": "done" },
         { "id": "6.2", "name": "Context menu with suggestions", "status": "done" },
         { "id": "6.3", "name": "Add to dictionary", "status": "done" },
-        { "id": "6.4", "name": "cspell exception support in markdown", "status": "not-started", "notes": "Requirement: user can place cspell exception comment in markdown to override spelling. Not implemented." }
+        { "id": "6.4", "name": "cspell exception support in markdown", "status": "done", "notes": "Right-click misspelled word → 'Ignore in this document' adds word to cspellIgnores in metadata. Serialized as <!-- cspell:ignore word1 word2 --> at top of .md file. Parsed on load (words added to session spell checker). Preserved in published/cleaned output. Phase 6 complete." }
       ]
     },
     {
