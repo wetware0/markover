@@ -145,10 +145,10 @@
     {
       "id": "phase-12",
       "name": "User Guide",
-      "status": "not-started",
+      "status": "done",
       "tasks": [
-        { "id": "12.1", "name": "User guide content (features, usage, shortcuts)", "status": "not-started" },
-        { "id": "12.2", "name": "In-app help or bundled guide", "status": "not-started" }
+        { "id": "12.1", "name": "User guide content (features, usage, shortcuts)", "status": "done", "notes": "HelpDialog covers all features: file ops, formatting shortcuts, comments, track changes, KaTeX, Mermaid, tables, images, file format." },
+        { "id": "12.2", "name": "In-app help or bundled guide", "status": "done", "notes": "F1 or Help > User Guide opens the HelpDialog. Searchable. Also added Collaborate menu (Add Comment, Toggle Track Changes) and Help menu to native menu bar." }
       ]
     }
   ],

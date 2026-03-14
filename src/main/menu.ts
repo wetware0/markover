@@ -98,6 +98,13 @@ export function buildMenu(
       ],
     },
     {
+      label: 'Collaborate',
+      submenu: [
+        { label: 'Add Comment', accelerator: 'CmdOrCtrl+Shift+M', click: () => sendAction('add-comment') },
+        { label: 'Toggle Track Changes', accelerator: 'CmdOrCtrl+Shift+T', click: () => sendAction('toggle-track-changes') },
+      ],
+    },
+    {
       label: 'View',
       submenu: [
         { label: 'Toggle Raw Mode', accelerator: 'CmdOrCtrl+Shift+R', click: () => sendAction('toggle-raw') },
@@ -110,6 +117,12 @@ export function buildMenu(
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        { label: 'User Guide', accelerator: 'F1', click: () => sendAction('help') },
       ],
     },
   ];

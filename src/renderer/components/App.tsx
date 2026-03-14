@@ -14,6 +14,7 @@ import { StatusBar } from '../ui/statusbar/StatusBar';
 import { CommentsPanel } from '../collaboration/comments/CommentsPanel';
 import { TrackChangesPanel } from '../collaboration/track-changes/TrackChangesPanel';
 import { RawEditor } from '../editor/RawEditor';
+import { HelpDialog } from '../ui/HelpDialog';
 import { KatexEditDialog } from '../ui/dialogs/KatexEditDialog';
 import { MermaidEditDialog } from '../ui/dialogs/MermaidEditDialog';
 import { ImageEditDialog } from '../ui/dialogs/ImageEditDialog';
@@ -37,6 +38,7 @@ export function App() {
   const { name: userName } = useUserStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userSettingsOpen, setUserSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('comments');
   const [pendingComment, setPendingComment] = useState<PendingComment | null>(null);
   const [commentText, setCommentText] = useState('');
@@ -51,6 +53,13 @@ export function App() {
     | { nodeType: 'mermaidBlock'; code: string; getPos: () => number | undefined }
     | { nodeType: 'image'; src: string; alt: string; width: string; getPos: () => number | undefined };
   const [nodeEdit, setNodeEdit] = useState<NodeEdit | null>(null);
+
+  // F1 opens help
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'F1') { e.preventDefault(); setHelpOpen(true); } };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Warn before window close when dirty (main process shows native dialog)
   useEffect(() => {
@@ -426,6 +435,7 @@ export function App() {
           break;
         }
         case 'publish': handlePublish(); break;
+        case 'help': setHelpOpen(true); break;
         case 'print':
           // Switch to WYSIWYG first so TipTap's rendered view is printed
           if (isRawMode) handleToggleRawMode();
@@ -530,6 +540,9 @@ export function App() {
         )}
       </div>
       <StatusBar />
+
+      {/* Help / user guide */}
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
 
       {/* Unsaved changes confirmation */}
       {discardConfirm && (
