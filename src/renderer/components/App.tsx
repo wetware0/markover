@@ -1,14 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { EditorContent } from '@tiptap/react';
 import { nanoid } from 'nanoid';
 import { useMarkoverEditor } from '../editor/use-editor';
 import { useEditorStore } from '../store/editor-store';
 import { useCommentsStore } from '../collaboration/comments/comment-store';
 import { useTrackChangesStore } from '../collaboration/track-changes/track-changes-store';
+import { useThemeStore } from '../store/theme-store';
 import { Toolbar } from '../ui/toolbar/Toolbar';
 import { StatusBar } from '../ui/statusbar/StatusBar';
 import { CommentsPanel } from '../collaboration/comments/CommentsPanel';
 import { TrackChangesPanel } from '../collaboration/track-changes/TrackChangesPanel';
+import { RawEditor } from '../editor/RawEditor';
 import { MessageSquare, GitCompare, X } from 'lucide-react';
 
 type SidebarTab = 'comments' | 'changes';
@@ -21,13 +23,16 @@ interface PendingComment {
 
 export function App() {
   const { editor, loadContent, getMarkdown, getMetadata, setMetadata } = useMarkoverEditor();
-  const { filePath, setFile, setDirty } = useEditorStore();
+  const { filePath, setFile, setDirty, isRawMode, setRawMode } = useEditorStore();
   const { setComments, comments, addComment, deleteComment: removeComment } = useCommentsStore();
   const { enabled: trackChangesEnabled, setEnabled: setTrackChangesEnabled, changes, setChanges, removeChange } = useTrackChangesStore();
+  const { resolved: resolvedTheme } = useThemeStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('comments');
   const [pendingComment, setPendingComment] = useState<PendingComment | null>(null);
   const [commentText, setCommentText] = useState('');
+  // Raw editor content — use a ref so CodeMirror doesn't lose cursor on each keystroke
+  const rawContentRef = useRef('');
 
   // Sync track changes enabled state to the ProseMirror plugin via the
   // persistent editor.storage (editor.extensionStorage), not extension.storage
@@ -45,9 +50,28 @@ export function App() {
     setMetadata(meta);
   }, [comments, getMetadata, setMetadata]);
 
+  const handleToggleRawMode = useCallback(() => {
+    if (!isRawMode) {
+      // WYSIWYG → Raw: serialize current content
+      syncCommentsToMetadata();
+      rawContentRef.current = getMarkdown();
+      setRawMode(true);
+    } else {
+      // Raw → WYSIWYG: parse raw content back into editor
+      loadContent(rawContentRef.current);
+      setComments(getMetadata().comments);
+      setRawMode(false);
+    }
+  }, [isRawMode, getMarkdown, loadContent, getMetadata, setComments, setRawMode, syncCommentsToMetadata]);
+
   const handleSave = useCallback(async () => {
-    syncCommentsToMetadata();
-    const content = getMarkdown();
+    let content: string;
+    if (isRawMode) {
+      content = rawContentRef.current;
+    } else {
+      syncCommentsToMetadata();
+      content = getMarkdown();
+    }
     if (filePath) {
       const result = await window.electronAPI.saveFile(filePath, content);
       if (result.success) setDirty(false);
@@ -58,24 +82,33 @@ export function App() {
         setDirty(false);
       }
     }
-  }, [filePath, getMarkdown, setFile, setDirty, syncCommentsToMetadata]);
+  }, [filePath, isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata]);
 
   const handleSaveAs = useCallback(async () => {
-    syncCommentsToMetadata();
-    const content = getMarkdown();
+    let content: string;
+    if (isRawMode) {
+      content = rawContentRef.current;
+    } else {
+      syncCommentsToMetadata();
+      content = getMarkdown();
+    }
     const result = await window.electronAPI.saveFileAs(content);
     if (result) {
       setFile(result.filePath, result.filePath.split(/[\\/]/).pop() || 'Untitled');
       setDirty(false);
     }
-  }, [getMarkdown, setFile, setDirty, syncCommentsToMetadata]);
+  }, [isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata]);
 
   const handleNew = useCallback(() => {
+    if (isRawMode) {
+      rawContentRef.current = '';
+      setRawMode(false);
+    }
     loadContent('');
     setFile(null, 'Untitled');
     setComments([]);
     setChanges([]);
-  }, [loadContent, setFile, setComments, setChanges]);
+  }, [isRawMode, loadContent, setFile, setComments, setChanges, setRawMode]);
 
   // Add comment to selected text — opens an inline dialog instead of window.prompt()
   const handleAddComment = useCallback(() => {
@@ -254,75 +287,86 @@ export function App() {
   // Handle file opened from main process (File > Open menu)
   useEffect(() => {
     const unsubscribe = window.electronAPI.onFileChanged((data) => {
+      setRawMode(false);
+      rawContentRef.current = '';
       loadContent(data.content);
       setFile(data.filePath, data.fileName);
       const meta = getMetadata();
       setComments(meta.comments);
     });
     return unsubscribe;
-  }, [loadContent, setFile, getMetadata, setComments]);
+  }, [loadContent, setFile, getMetadata, setComments, setRawMode]);
 
   // Handle menu actions
   useEffect(() => {
-    if (!editor) return;
     const unsubscribe = window.electronAPI.onMenuAction((action: string) => {
       switch (action) {
         case 'new': handleNew(); break;
-        // 'open' is handled directly by main process menu → onFileChanged
         case 'save': handleSave(); break;
         case 'save-as': handleSaveAs(); break;
-        case 'bold': editor.chain().focus().toggleBold().run(); break;
-        case 'italic': editor.chain().focus().toggleItalic().run(); break;
-        case 'underline': editor.chain().focus().toggleUnderline().run(); break;
-        case 'strike': editor.chain().focus().toggleStrike().run(); break;
-        case 'code': editor.chain().focus().toggleCode().run(); break;
-        case 'code-block': editor.chain().focus().toggleCodeBlock().run(); break;
-        case 'blockquote': editor.chain().focus().toggleBlockquote().run(); break;
-        case 'horizontal-rule': editor.chain().focus().setHorizontalRule().run(); break;
-        case 'add-comment': handleAddComment(); break;
+        case 'toggle-raw': handleToggleRawMode(); break;
+        // Formatting actions only apply in WYSIWYG mode
+        case 'bold': if (!isRawMode && editor) editor.chain().focus().toggleBold().run(); break;
+        case 'italic': if (!isRawMode && editor) editor.chain().focus().toggleItalic().run(); break;
+        case 'underline': if (!isRawMode && editor) editor.chain().focus().toggleUnderline().run(); break;
+        case 'strike': if (!isRawMode && editor) editor.chain().focus().toggleStrike().run(); break;
+        case 'code': if (!isRawMode && editor) editor.chain().focus().toggleCode().run(); break;
+        case 'code-block': if (!isRawMode && editor) editor.chain().focus().toggleCodeBlock().run(); break;
+        case 'blockquote': if (!isRawMode && editor) editor.chain().focus().toggleBlockquote().run(); break;
+        case 'horizontal-rule': if (!isRawMode && editor) editor.chain().focus().setHorizontalRule().run(); break;
+        case 'add-comment': if (!isRawMode) handleAddComment(); break;
         case 'toggle-track-changes': {
-          const next = !trackChangesEnabled;
-          setTrackChangesEnabled(next);
-          if (next) {
-            setSidebarOpen(true);
-            setSidebarTab('changes');
+          if (!isRawMode) {
+            const next = !trackChangesEnabled;
+            setTrackChangesEnabled(next);
+            if (next) { setSidebarOpen(true); setSidebarTab('changes'); }
           }
           break;
         }
         case 'print':
+          // Switch to WYSIWYG first so TipTap's rendered view is printed
+          if (isRawMode) handleToggleRawMode();
           window.electronAPI.print();
           break;
         case 'export-pdf':
+          if (isRawMode) handleToggleRawMode();
           window.electronAPI.exportPdf();
           break;
       }
     });
     return unsubscribe;
-  }, [editor, handleNew, handleSave, handleSaveAs, handleAddComment, trackChangesEnabled, setTrackChangesEnabled]);
+  }, [editor, isRawMode, handleNew, handleSave, handleSaveAs, handleToggleRawMode, handleAddComment, trackChangesEnabled, setTrackChangesEnabled]);
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <Toolbar
         editor={editor}
+        isRawMode={isRawMode}
+        onToggleRawMode={handleToggleRawMode}
         onAddComment={handleAddComment}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         trackChangesEnabled={trackChangesEnabled}
         onToggleTrackChanges={() => {
           const next = !trackChangesEnabled;
           setTrackChangesEnabled(next);
-          if (next) {
-            setSidebarOpen(true);
-            setSidebarTab('changes');
-          }
+          if (next) { setSidebarOpen(true); setSidebarTab('changes'); }
         }}
       />
       <div className="flex flex-1 overflow-hidden">
+        {isRawMode ? (
+          <RawEditor
+            value={rawContentRef.current}
+            onChange={(v) => { rawContentRef.current = v; setDirty(true); }}
+            isDark={resolvedTheme === 'dark'}
+          />
+        ) : (
         <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
           <div className="max-w-4xl mx-auto">
             <EditorContent editor={editor} className="min-h-full" />
           </div>
         </div>
-        {sidebarOpen && (
+        )}
+        {!isRawMode && sidebarOpen && (
           <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col flex-shrink-0">
             {/* Sidebar tabs */}
             <div className="flex items-center border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">

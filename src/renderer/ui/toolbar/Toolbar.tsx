@@ -23,6 +23,7 @@ import {
   MessageSquarePlus,
   PanelRight,
   GitCompare,
+  FileCode,
   Sun,
   Moon,
   Monitor,
@@ -31,6 +32,8 @@ import { useThemeStore } from '../../store/theme-store';
 
 interface ToolbarProps {
   editor: Editor | null;
+  isRawMode?: boolean;
+  onToggleRawMode?: () => void;
   onAddComment?: () => void;
   onToggleSidebar?: () => void;
   trackChangesEnabled?: boolean;
@@ -65,9 +68,9 @@ function ToolbarDivider() {
   return <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />;
 }
 
-export function Toolbar({ editor, onAddComment, onToggleSidebar, trackChangesEnabled, onToggleTrackChanges }: ToolbarProps) {
+export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onToggleSidebar, trackChangesEnabled, onToggleTrackChanges }: ToolbarProps) {
   const { mode, cycle } = useThemeStore();
-  if (!editor) return null;
+  if (!editor && !isRawMode) return null;
 
   const iconSize = 18;
   const ThemeIcon = mode === 'light' ? Sun : mode === 'dark' ? Moon : Monitor;
@@ -75,133 +78,148 @@ export function Toolbar({ editor, onAddComment, onToggleSidebar, trackChangesEna
 
   return (
     <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-shrink-0 overflow-x-auto">
-      {/* Undo/Redo */}
-      <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)">
-        <Undo size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo (Ctrl+Y)">
-        <Redo size={iconSize} />
-      </ToolbarButton>
+      {/* Undo/Redo — WYSIWYG only (CodeMirror has its own history) */}
+      {!isRawMode && editor && (<>
+        <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)">
+          <Undo size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo (Ctrl+Y)">
+          <Redo size={iconSize} />
+        </ToolbarButton>
 
-      <ToolbarDivider />
+        <ToolbarDivider />
 
-      {/* Headings */}
-      <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} isActive={editor.isActive('heading', { level: 1 })} title="Heading 1">
-        <Heading1 size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} isActive={editor.isActive('heading', { level: 2 })} title="Heading 2">
-        <Heading2 size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} isActive={editor.isActive('heading', { level: 3 })} title="Heading 3">
-        <Heading3 size={iconSize} />
-      </ToolbarButton>
+        {/* Headings */}
+        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} isActive={editor.isActive('heading', { level: 1 })} title="Heading 1">
+          <Heading1 size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} isActive={editor.isActive('heading', { level: 2 })} title="Heading 2">
+          <Heading2 size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} isActive={editor.isActive('heading', { level: 3 })} title="Heading 3">
+          <Heading3 size={iconSize} />
+        </ToolbarButton>
 
-      <ToolbarDivider />
+        <ToolbarDivider />
 
-      {/* Inline formatting */}
-      <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} title="Bold (Ctrl+B)">
-        <Bold size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} title="Italic (Ctrl+I)">
-        <Italic size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} title="Underline (Ctrl+U)">
-        <Underline size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editor.isActive('strike')} title="Strikethrough">
-        <Strikethrough size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} isActive={editor.isActive('code')} title="Inline Code (Ctrl+E)">
-        <Code size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleHighlight().run()} isActive={editor.isActive('highlight')} title="Highlight">
-        <Highlighter size={iconSize} />
-      </ToolbarButton>
+        {/* Inline formatting */}
+        <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} title="Bold (Ctrl+B)">
+          <Bold size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} title="Italic (Ctrl+I)">
+          <Italic size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} title="Underline (Ctrl+U)">
+          <Underline size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editor.isActive('strike')} title="Strikethrough">
+          <Strikethrough size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} isActive={editor.isActive('code')} title="Inline Code (Ctrl+E)">
+          <Code size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleHighlight().run()} isActive={editor.isActive('highlight')} title="Highlight">
+          <Highlighter size={iconSize} />
+        </ToolbarButton>
 
-      <ToolbarDivider />
+        <ToolbarDivider />
 
-      {/* Lists */}
-      <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editor.isActive('bulletList')} title="Bullet List">
-        <List size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editor.isActive('orderedList')} title="Numbered List">
-        <ListOrdered size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleTaskList().run()} isActive={editor.isActive('taskList')} title="Task List">
-        <ListTodo size={iconSize} />
-      </ToolbarButton>
+        {/* Lists */}
+        <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editor.isActive('bulletList')} title="Bullet List">
+          <List size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editor.isActive('orderedList')} title="Numbered List">
+          <ListOrdered size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleTaskList().run()} isActive={editor.isActive('taskList')} title="Task List">
+          <ListTodo size={iconSize} />
+        </ToolbarButton>
 
-      <ToolbarDivider />
+        <ToolbarDivider />
 
-      {/* Block elements */}
-      <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editor.isActive('blockquote')} title="Blockquote">
-        <Quote size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editor.isActive('codeBlock')} title="Code Block">
-        <Code size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal Rule">
-        <Minus size={iconSize} />
-      </ToolbarButton>
+        {/* Block elements */}
+        <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editor.isActive('blockquote')} title="Blockquote">
+          <Quote size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} isActive={editor.isActive('codeBlock')} title="Code Block">
+          <Code size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal Rule">
+          <Minus size={iconSize} />
+        </ToolbarButton>
 
-      <ToolbarDivider />
+        <ToolbarDivider />
 
-      {/* Insert */}
-      <ToolbarButton
-        onClick={() => {
-          const url = window.prompt('Enter URL:');
-          if (url) editor.chain().focus().setLink({ href: url }).run();
-        }}
-        isActive={editor.isActive('link')}
-        title="Insert Link"
-      >
-        <Link size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton
-        onClick={() => {
-          const url = window.prompt('Enter image URL:');
-          if (url) editor.chain().focus().setImage({ src: url }).run();
-        }}
-        title="Insert Image"
-      >
-        <Image size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton
-        onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-        title="Insert Table"
-      >
-        <Table size={iconSize} />
-      </ToolbarButton>
+        {/* Insert */}
+        <ToolbarButton
+          onClick={() => {
+            const url = window.prompt('Enter URL:');
+            if (url) editor.chain().focus().setLink({ href: url }).run();
+          }}
+          isActive={editor.isActive('link')}
+          title="Insert Link"
+        >
+          <Link size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => {
+            const url = window.prompt('Enter image URL:');
+            if (url) editor.chain().focus().setImage({ src: url }).run();
+          }}
+          title="Insert Image"
+        >
+          <Image size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          title="Insert Table"
+        >
+          <Table size={iconSize} />
+        </ToolbarButton>
 
-      <ToolbarDivider />
+        <ToolbarDivider />
 
-      {/* Collaboration */}
-      <ToolbarButton
-        onClick={() => onAddComment?.()}
-        disabled={editor.state.selection.from === editor.state.selection.to}
-        title="Add Comment (select text first)"
-      >
-        <MessageSquarePlus size={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton
-        onClick={() => onToggleTrackChanges?.()}
-        isActive={trackChangesEnabled}
-        title={trackChangesEnabled ? 'Track Changes: ON' : 'Track Changes: OFF'}
-      >
-        <GitCompare size={iconSize} />
-      </ToolbarButton>
+        {/* Collaboration */}
+        <ToolbarButton
+          onClick={() => onAddComment?.()}
+          disabled={editor.state.selection.from === editor.state.selection.to}
+          title="Add Comment (select text first)"
+        >
+          <MessageSquarePlus size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => onToggleTrackChanges?.()}
+          isActive={trackChangesEnabled}
+          title={trackChangesEnabled ? 'Track Changes: ON' : 'Track Changes: OFF'}
+        >
+          <GitCompare size={iconSize} />
+        </ToolbarButton>
+
+        <ToolbarDivider />
+      </>)}
 
       <div className="flex-1" />
+
+      {/* Raw mode toggle */}
+      <ToolbarButton
+        onClick={() => onToggleRawMode?.()}
+        isActive={isRawMode}
+        title={isRawMode ? 'Switch to WYSIWYG' : 'Edit Raw Markdown'}
+      >
+        <FileCode size={iconSize} />
+      </ToolbarButton>
 
       {/* Theme toggle */}
       <ToolbarButton onClick={cycle} title={`Theme: ${themeLabel}`}>
         <ThemeIcon size={iconSize} />
       </ToolbarButton>
 
-      {/* Sidebar toggle */}
-      <ToolbarButton onClick={() => onToggleSidebar?.()} title="Toggle Sidebar">
-        <PanelRight size={iconSize} />
-      </ToolbarButton>
+      {/* Sidebar toggle — WYSIWYG only */}
+      {!isRawMode && (
+        <ToolbarButton onClick={() => onToggleSidebar?.()} title="Toggle Sidebar">
+          <PanelRight size={iconSize} />
+        </ToolbarButton>
+      )}
     </div>
   );
 }

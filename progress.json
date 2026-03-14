@@ -123,11 +123,11 @@
     {
       "id": "phase-10",
       "name": "Raw Edit Mode",
-      "status": "not-started",
+      "status": "done",
       "tasks": [
-        { "id": "10.1", "name": "Toggle between WYSIWYG and raw markdown editing", "status": "not-started", "notes": "Split or tab view showing raw markdown source. Edits in either view sync to the other." },
-        { "id": "10.2", "name": "Syntax-highlighted raw editor (CodeMirror or Monaco)", "status": "not-started" },
-        { "id": "10.3", "name": "Toolbar/status bar indicator for current mode", "status": "not-started" }
+        { "id": "10.1", "name": "Toggle between WYSIWYG and raw markdown editing", "status": "done", "notes": "FileCode button in toolbar. Switches on toggle; syncs content both ways via getMarkdown()/loadContent()." },
+        { "id": "10.2", "name": "Syntax-highlighted raw editor (CodeMirror 6)", "status": "done", "notes": "Uses @uiw/react-codemirror with @codemirror/lang-markdown. One Dark theme in dark mode." },
+        { "id": "10.3", "name": "Toolbar/status bar indicator for current mode", "status": "done", "notes": "FileCode button shows active state; status bar shows 'Raw Mode' in purple." }
       ]
     },
     {

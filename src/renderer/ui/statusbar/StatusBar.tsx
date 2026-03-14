@@ -4,7 +4,7 @@ import { useTrackChangesStore } from '../../collaboration/track-changes/track-ch
 import { SpellCheck } from 'lucide-react';
 
 export function StatusBar() {
-  const { fileName, isDirty, wordCount, charCount, cursorLine, cursorCol } = useEditorStore();
+  const { fileName, isDirty, wordCount, charCount, cursorLine, cursorCol, isRawMode } = useEditorStore();
   const { enabled: trackChangesOn } = useTrackChangesStore();
 
   return (
@@ -14,7 +14,10 @@ export function StatusBar() {
           {fileName}
           {isDirty ? ' \u2022' : ''}
         </span>
-        {trackChangesOn && (
+        {isRawMode && (
+          <span className="text-purple-600 dark:text-purple-400 font-medium">Raw Mode</span>
+        )}
+        {trackChangesOn && !isRawMode && (
           <span className="text-green-600 font-medium">Track Changes</span>
         )}
       </div>
