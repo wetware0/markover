@@ -1,6 +1,19 @@
 import Image from '@tiptap/extension-image';
 
 /**
+ * Convert a raw markdown image src to a URL the renderer can load.
+ * - Already-resolved URLs (data:, http:, https:, file:) are used as-is.
+ * - All local paths (relative, root-relative, absolute filesystem) are
+ *   passed through the markover-asset: protocol so the main process can
+ *   resolve them against the open file's directory and git root.
+ */
+function resolveImageSrc(src: string): string {
+  if (!src) return src;
+  if (/^(data:|https?:|file:)/i.test(src)) return src;
+  return 'markover-asset://?src=' + encodeURIComponent(src);
+}
+
+/**
  * Extends TipTap's Image extension with:
  * - a `width` attribute (serialized as inline HTML when set)
  * - a custom node view that adds a blue hover outline and dispatches
@@ -21,7 +34,7 @@ export const MarkoverImage = Image.extend({
   addNodeView() {
     return ({ node, getPos }) => {
       const img = document.createElement('img');
-      img.src = (node.attrs.src as string) || '';
+      img.src = resolveImageSrc((node.attrs.src as string) || '');
       img.alt = (node.attrs.alt as string) || '';
       if (node.attrs.title) img.title = node.attrs.title as string;
       if (node.attrs.width) img.style.width = node.attrs.width as string;

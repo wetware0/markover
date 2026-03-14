@@ -1,10 +1,35 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, session } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, session, protocol, net } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import os from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import started from 'electron-squirrel-startup';
+
+const execFileAsync = promisify(execFile);
+
+const gitRootCache = new Map<string, string | null>();
+
+async function getGitRoot(dir: string): Promise<string | null> {
+  if (gitRootCache.has(dir)) return gitRootCache.get(dir)!;
+  try {
+    const { stdout } = await execFileAsync('git', ['-C', dir, 'rev-parse', '--show-toplevel']);
+    const root = stdout.trim();
+    gitRootCache.set(dir, root);
+    return root;
+  } catch {
+    gitRootCache.set(dir, null);
+    return null;
+  }
+}
+
 import { IPC_CHANNELS } from '../shared/types/ipc';
 import { buildMenu } from './menu';
+
+// Must be called before app.ready
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'markover-asset', privileges: { secure: true, supportFetchAPI: true } },
+]);
 
 if (started) {
   app.quit();
@@ -302,7 +327,63 @@ ipcMain.handle(IPC_CHANNELS.GET_OS_USERNAME, () => {
   }
 });
 
-app.on('ready', createWindow);
+app.on('ready', () => {
+  protocol.handle('markover-asset', async (request) => {
+    const url = new URL(request.url);
+    const rawSrc = decodeURIComponent(url.searchParams.get('src') ?? '');
+    if (!rawSrc) return new Response('Missing src parameter', { status: 400 });
+
+    let absolutePath: string;
+
+    // Windows absolute path: C:\ or C:/
+    if (/^[A-Za-z]:[/\\]/.test(rawSrc)) {
+      absolutePath = rawSrc.replace(/\\/g, '/');
+    } else if (rawSrc.startsWith('/')) {
+      // Root-relative: try git root of the open file first.
+      // On Windows, a bare /path has no drive letter so filesystem-absolute
+      // resolution is meaningless — git root is the only sensible fallback.
+      // On Unix, if the git root candidate doesn't exist, fall back to
+      // filesystem absolute.
+      const fileDir = currentFilePath ? path.dirname(currentFilePath) : null;
+      const gitRoot = fileDir ? await getGitRoot(fileDir) : null;
+      if (gitRoot) {
+        const candidate = path.join(gitRoot, rawSrc);
+        try {
+          await fs.access(candidate);
+          absolutePath = candidate.replace(/\\/g, '/');
+        } catch {
+          if (process.platform === 'win32') {
+            // No meaningful filesystem-absolute fallback on Windows
+            return new Response('Asset not found', { status: 404 });
+          }
+          // Unix: try as filesystem absolute
+          absolutePath = rawSrc;
+        }
+      } else {
+        if (process.platform === 'win32') {
+          return new Response('Asset not found', { status: 404 });
+        }
+        absolutePath = rawSrc;
+      }
+    } else {
+      // Relative path — resolve against directory of the open file
+      if (!currentFilePath) return new Response('No file is open', { status: 404 });
+      absolutePath = path.join(path.dirname(currentFilePath), rawSrc).replace(/\\/g, '/');
+    }
+
+    const fileUrl = process.platform === 'win32'
+      ? `file:///${absolutePath}`
+      : `file://${absolutePath}`;
+
+    try {
+      return await net.fetch(fileUrl);
+    } catch {
+      return new Response('Asset not found', { status: 404 });
+    }
+  });
+
+  void createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
