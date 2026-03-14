@@ -193,10 +193,14 @@ const nodeHandlers: Record<string, NodeHandler> = {
 
   codeBlock(state, node) {
     const language = (node.attrs.language as string) || '';
-    state.write('```' + language + '\n');
-    state.write(node.textContent);
+    const content = node.textContent;
+    // Use a fence longer than any backtick run inside the content
+    const maxRun = (content.match(/`+/g) ?? []).reduce((m, s) => Math.max(m, s.length), 2);
+    const fence = '`'.repeat(maxRun + 1);
+    state.write(fence + language + '\n');
+    state.write(content);
     state.ensureNewLine();
-    state.write('```');
+    state.write(fence);
     state.closeBlock();
   },
 
@@ -352,7 +356,7 @@ function getMarkWrapper(mark: Mark): { open: string; close: string } | null {
       const title = mark.attrs.title as string;
       return {
         open: '[',
-        close: `](${href}${title ? ` "${title}"` : ''})`,
+        close: `](${href}${title ? ` "${title.replace(/"/g, '\\"')}"` : ''})`,
       };
     }
     case 'highlight': {
