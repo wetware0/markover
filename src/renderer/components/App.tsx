@@ -16,6 +16,7 @@ import { TrackChangesPanel } from '../collaboration/track-changes/TrackChangesPa
 import { RawEditor } from '../editor/RawEditor';
 import { KatexEditDialog } from '../ui/dialogs/KatexEditDialog';
 import { MermaidEditDialog } from '../ui/dialogs/MermaidEditDialog';
+import { ImageEditDialog } from '../ui/dialogs/ImageEditDialog';
 import { TableBubbleMenu } from '../ui/table/TableBubbleMenu';
 import { MessageSquare, GitCompare, X } from 'lucide-react';
 
@@ -45,7 +46,8 @@ export function App() {
   // Node edit state (KaTeX / Mermaid click-to-edit dialogs)
   type NodeEdit =
     | { nodeType: 'katexInline' | 'katexBlock'; math: string; getPos: () => number | undefined }
-    | { nodeType: 'mermaidBlock'; code: string; getPos: () => number | undefined };
+    | { nodeType: 'mermaidBlock'; code: string; getPos: () => number | undefined }
+    | { nodeType: 'image'; src: string; alt: string; width: string; getPos: () => number | undefined };
   const [nodeEdit, setNodeEdit] = useState<NodeEdit | null>(null);
 
   // Sync user name to comments store and track changes plugin
@@ -517,6 +519,15 @@ export function App() {
         <MermaidEditDialog
           code={nodeEdit.code}
           onSave={(code) => handleNodeEditSave({ code })}
+          onCancel={() => setNodeEdit(null)}
+        />
+      )}
+      {nodeEdit && nodeEdit.nodeType === 'image' && (
+        <ImageEditDialog
+          src={nodeEdit.src}
+          alt={nodeEdit.alt}
+          width={nodeEdit.width}
+          onSave={(attrs) => handleNodeEditSave(attrs)}
           onCancel={() => setNodeEdit(null)}
         />
       )}

@@ -224,7 +224,14 @@ const nodeHandlers: Record<string, NodeHandler> = {
     const alt = (node.attrs.alt as string) || '';
     const src = node.attrs.src as string;
     const title = node.attrs.title as string;
-    state.write(`![${alt}](${src}${title ? ` "${title}"` : ''})`);
+    const width = node.attrs.width as string | null;
+    // Emit HTML img tag when a custom width is set so it round-trips cleanly
+    if (width) {
+      const titleAttr = title ? ` title="${title}"` : '';
+      state.write(`<img src="${src}" alt="${alt}"${titleAttr} width="${width}">`);
+    } else {
+      state.write(`![${alt}](${src}${title ? ` "${title}"` : ''})`);
+    }
   },
 
   text(state, node) {

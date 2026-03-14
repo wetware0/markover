@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import type { Editor } from '@tiptap/core';
 import {
   Bold,
@@ -73,6 +73,10 @@ function ToolbarDivider() {
 export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onToggleSidebar, trackChangesEnabled, onToggleTrackChanges, onOpenUserSettings }: ToolbarProps) {
   const { mode, cycle } = useThemeStore();
   const { name, color } = useUserStore();
+  const [linkDialog, setLinkDialog] = useState<{ href: string } | null>(null);
+  const [imageInsertDialog, setImageInsertDialog] = useState(false);
+  const linkInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   if (!editor && !isRawMode) return null;
 
   const iconSize = 18;
@@ -155,20 +159,14 @@ export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onTo
 
         {/* Insert */}
         <ToolbarButton
-          onClick={() => {
-            const url = window.prompt('Enter URL:');
-            if (url) editor.chain().focus().setLink({ href: url }).run();
-          }}
+          onClick={() => setLinkDialog({ href: editor.getAttributes('link').href as string || '' })}
           isActive={editor.isActive('link')}
-          title="Insert Link"
+          title="Insert / Edit Link"
         >
           <Link size={iconSize} />
         </ToolbarButton>
         <ToolbarButton
-          onClick={() => {
-            const url = window.prompt('Enter image URL:');
-            if (url) editor.chain().focus().setImage({ src: url }).run();
-          }}
+          onClick={() => setImageInsertDialog(true)}
           title="Insert Image"
         >
           <Image size={iconSize} />
@@ -233,6 +231,96 @@ export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onTo
         <ToolbarButton onClick={() => onToggleSidebar?.()} title="Toggle Sidebar">
           <PanelRight size={iconSize} />
         </ToolbarButton>
+      )}
+
+      {/* Link dialog */}
+      {linkDialog !== null && editor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-5 w-96 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-3">Insert Link</h3>
+            <input
+              ref={linkInputRef}
+              autoFocus
+              type="text"
+              defaultValue={linkDialog.href}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const href = linkInputRef.current?.value.trim();
+                  if (href) editor.chain().focus().setLink({ href }).run();
+                  else editor.chain().focus().unsetLink().run();
+                  setLinkDialog(null);
+                }
+                if (e.key === 'Escape') { editor.chain().focus().run(); setLinkDialog(null); }
+              }}
+              placeholder="https://…"
+              className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+            />
+            <div className="flex justify-between">
+              {linkDialog.href && (
+                <button
+                  type="button"
+                  onClick={() => { editor.chain().focus().unsetLink().run(); setLinkDialog(null); }}
+                  className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded"
+                >
+                  Remove Link
+                </button>
+              )}
+              <div className="flex gap-2 ml-auto">
+                <button type="button" onClick={() => setLinkDialog(null)} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const href = linkInputRef.current?.value.trim();
+                    if (href) editor.chain().focus().setLink({ href }).run();
+                    setLinkDialog(null);
+                  }}
+                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image insert dialog */}
+      {imageInsertDialog && editor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-5 w-96 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-3">Insert Image</h3>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Image URL</label>
+            <input
+              ref={imageInputRef}
+              autoFocus
+              type="text"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const src = imageInputRef.current?.value.trim();
+                  if (src) editor.chain().focus().setImage({ src }).run();
+                  setImageInsertDialog(false);
+                }
+                if (e.key === 'Escape') setImageInsertDialog(false);
+              }}
+              placeholder="https://…"
+              className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setImageInsertDialog(false)} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">Cancel</button>
+              <button
+                type="button"
+                onClick={() => {
+                  const src = imageInputRef.current?.value.trim();
+                  if (src) editor.chain().focus().setImage({ src }).run();
+                  setImageInsertDialog(false);
+                }}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Insert
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
