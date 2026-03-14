@@ -211,6 +211,17 @@
   text-align: left;
 }
 
+/* Code block with language header */
+.ProseMirror .code-block-wrapper {
+  margin: 1em 0;
+}
+
+.ProseMirror .code-block-wrapper pre {
+  margin: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
 /* Front matter */
 .ProseMirror .front-matter {
   background: #f3f4f6;

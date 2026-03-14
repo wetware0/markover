@@ -4,6 +4,7 @@ import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import { MarkoverImage } from './extensions/image-editable';
+import { MarkoverCodeBlock } from './extensions/code-block-lowlight';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Highlight from '@tiptap/extension-highlight';
@@ -65,8 +66,9 @@ export function useMarkoverEditor() {
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4, 5, 6] },
-        codeBlock: { HTMLAttributes: { class: 'hljs' } },
+        codeBlock: false, // replaced by MarkoverCodeBlock (lowlight + React node view)
       }),
+      MarkoverCodeBlock,
       Underline,
       Placeholder.configure({ placeholder: 'Start writing…' }),
       Link.configure({ openOnClick: false, autolink: true }),
