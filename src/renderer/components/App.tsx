@@ -493,7 +493,7 @@ export function App() {
         }}
         onOpenUserSettings={() => setUserSettingsOpen(true)}
       />
-      {!isRawMode && editor && <TableContextBar editor={editor} />}
+      {!isRawMode && editor && <div className="print:hidden"><TableContextBar editor={editor} /></div>}
       <div className="flex flex-1 overflow-hidden">
         {isRawMode ? (
           <RawEditor
@@ -509,7 +509,7 @@ export function App() {
         </div>
         )}
         {!isRawMode && sidebarOpen && (
-          <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col flex-shrink-0">
+          <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col flex-shrink-0 print:hidden">
             {/* Sidebar tabs */}
             <div className="flex items-center border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
               <button

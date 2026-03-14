@@ -84,7 +84,7 @@ export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onTo
   const themeLabel = mode === 'light' ? 'Light' : mode === 'dark' ? 'Dark' : 'System';
 
   return (
-    <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-shrink-0 overflow-x-auto">
+    <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-shrink-0 overflow-x-auto print:hidden">
       {/* Undo/Redo — WYSIWYG only (CodeMirror has its own history) */}
       {!isRawMode && editor && (<>
         <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)">

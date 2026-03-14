@@ -399,8 +399,7 @@
     color: black !important;
   }
 
-  /* Hide toolbar, sidebar, statusbar */
-  .flex.items-center.gap-0\\.5 { display: none !important; }
+  /* Toolbar, sidebar, and statusbar are hidden via print:hidden on the elements */
 
   .ProseMirror {
     padding: 0 !important;
