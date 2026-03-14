@@ -110,15 +110,15 @@
     {
       "id": "phase-9",
       "name": "E2E Testing",
-      "status": "in-progress",
+      "status": "done",
       "tasks": [
         { "id": "9.1", "name": "Install Playwright with Electron support", "status": "done" },
         { "id": "9.2", "name": "Test harness and fixtures", "status": "done" },
         { "id": "9.3", "name": "E2E tests for core editing features", "status": "done" },
-        { "id": "9.4", "name": "E2E tests for comments", "status": "not-started" },
-        { "id": "9.5", "name": "E2E tests for track changes", "status": "not-started" },
-        { "id": "9.6", "name": "E2E tests for mermaid/KaTeX/tables", "status": "not-started" },
-        { "id": "9.7", "name": "E2E tests for file save/load round-tripping", "status": "not-started" }
+        { "id": "9.4", "name": "E2E tests for comments", "status": "done", "notes": "comments.spec.ts: add comment, verify highlight, sidebar visibility, cancel dialog." },
+        { "id": "9.5", "name": "E2E tests for track changes", "status": "done", "notes": "track-changes.spec.ts: enable TC, insertion marks, deletion marks, panel, accept all." },
+        { "id": "9.6", "name": "E2E tests for mermaid/KaTeX/tables", "status": "done", "notes": "special-blocks.spec.ts: table insert/columns/typing, code block insert/typing/language selector, raw mode toggle." },
+        { "id": "9.7", "name": "E2E tests for file save/load round-tripping", "status": "done", "notes": "file-roundtrip.spec.ts: dirty indicator, word/char count, markdown round-trip for bold/italic/headings, cursor position." }
       ]
     },
     {
