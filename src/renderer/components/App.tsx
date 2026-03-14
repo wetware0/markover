@@ -14,6 +14,7 @@ import { TrackChangesPanel } from '../collaboration/track-changes/TrackChangesPa
 import { RawEditor } from '../editor/RawEditor';
 import { KatexEditDialog } from '../ui/dialogs/KatexEditDialog';
 import { MermaidEditDialog } from '../ui/dialogs/MermaidEditDialog';
+import { TableBubbleMenu } from '../ui/table/TableBubbleMenu';
 import { MessageSquare, GitCompare, X } from 'lucide-react';
 
 type SidebarTab = 'comments' | 'changes';
@@ -410,6 +411,7 @@ export function App() {
         <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
           <div className="max-w-4xl mx-auto">
             <EditorContent editor={editor} className="min-h-full" />
+            {editor && <TableBubbleMenu editor={editor} />}
           </div>
         </div>
         )}

@@ -30,7 +30,8 @@
         { "id": "2.7", "name": "YAML front matter", "status": "done" },
         { "id": "2.8", "name": "Image drop/paste insertion", "status": "done" },
         { "id": "2.9", "name": "Image resize UI and alt-text editing", "status": "not-started", "notes": "No drag handles or alt-text editing UI." },
-        { "id": "2.10", "name": "Table editing", "status": "done" }
+        { "id": "2.10", "name": "Table editing", "status": "done", "notes": "TableBubbleMenu floats when cursor is in a table: insert/delete/move columns and rows, delete table. Uses prosemirror-tables moveTableColumn/moveTableRow." },
+        { "id": "2.11", "name": "Broken local images", "status": "not-started", "notes": "Images with relative file paths don't resolve because renderer base URL is the Vite dev server, not the file directory. Fix requires a custom protocol handler or path rewriting in the main process." }
       ]
     },
     {
