@@ -29,6 +29,7 @@ import {
   Monitor,
 } from 'lucide-react';
 import { useThemeStore } from '../../store/theme-store';
+import { useUserStore, getInitials } from '../../store/user-store';
 
 interface ToolbarProps {
   editor: Editor | null;
@@ -38,6 +39,7 @@ interface ToolbarProps {
   onToggleSidebar?: () => void;
   trackChangesEnabled?: boolean;
   onToggleTrackChanges?: () => void;
+  onOpenUserSettings?: () => void;
 }
 
 interface ToolbarButtonProps {
@@ -68,8 +70,9 @@ function ToolbarDivider() {
   return <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />;
 }
 
-export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onToggleSidebar, trackChangesEnabled, onToggleTrackChanges }: ToolbarProps) {
+export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onToggleSidebar, trackChangesEnabled, onToggleTrackChanges, onOpenUserSettings }: ToolbarProps) {
   const { mode, cycle } = useThemeStore();
+  const { name, color } = useUserStore();
   if (!editor && !isRawMode) return null;
 
   const iconSize = 18;
@@ -208,6 +211,17 @@ export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onTo
       >
         <FileCode size={iconSize} />
       </ToolbarButton>
+
+      {/* User identity */}
+      <button
+        type="button"
+        onClick={() => onOpenUserSettings?.()}
+        title={name ? `Signed in as ${name}` : 'Set your identity'}
+        className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold hover:opacity-80 transition-opacity select-none"
+        style={{ backgroundColor: color }}
+      >
+        {getInitials(name) || '?'}
+      </button>
 
       {/* Theme toggle */}
       <ToolbarButton onClick={cycle} title={`Theme: ${themeLabel}`}>

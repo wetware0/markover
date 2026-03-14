@@ -4,6 +4,8 @@ import { nanoid } from 'nanoid';
 import { useMarkoverEditor } from '../editor/use-editor';
 import { useEditorStore } from '../store/editor-store';
 import { parseMarkoverFile } from '../../shared/markover-codec';
+import { useUserStore, getAuthorName } from '../store/user-store';
+import { UserSettingsDialog } from '../ui/UserSettingsDialog';
 import { useCommentsStore } from '../collaboration/comments/comment-store';
 import { useTrackChangesStore } from '../collaboration/track-changes/track-changes-store';
 import { useThemeStore } from '../store/theme-store';
@@ -31,7 +33,9 @@ export function App() {
   const { setComments, comments, addComment, deleteComment: removeComment } = useCommentsStore();
   const { enabled: trackChangesEnabled, setEnabled: setTrackChangesEnabled, changes, setChanges, removeChange } = useTrackChangesStore();
   const { resolved: resolvedTheme } = useThemeStore();
+  const { name: userName } = useUserStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [userSettingsOpen, setUserSettingsOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('comments');
   const [pendingComment, setPendingComment] = useState<PendingComment | null>(null);
   const [commentText, setCommentText] = useState('');
@@ -43,6 +47,16 @@ export function App() {
     | { nodeType: 'katexInline' | 'katexBlock'; math: string; getPos: () => number | undefined }
     | { nodeType: 'mermaidBlock'; code: string; getPos: () => number | undefined };
   const [nodeEdit, setNodeEdit] = useState<NodeEdit | null>(null);
+
+  // Sync user name to comments store and track changes plugin
+  useEffect(() => {
+    const author = getAuthorName(userName);
+    useCommentsStore.getState().setCurrentAuthor(author);
+    if (editor) {
+      const s = editor.storage.trackChangesPlugin as Record<string, unknown> | undefined;
+      if (s) s.author = author;
+    }
+  }, [userName, editor]);
 
   // Sync track changes enabled state to the ProseMirror plugin via the
   // persistent editor.storage (editor.extensionStorage), not extension.storage
@@ -410,6 +424,7 @@ export function App() {
           setTrackChangesEnabled(next);
           if (next) { setSidebarOpen(true); setSidebarTab('changes'); }
         }}
+        onOpenUserSettings={() => setUserSettingsOpen(true)}
       />
       <div className="flex flex-1 overflow-hidden">
         {isRawMode ? (
@@ -485,6 +500,9 @@ export function App() {
         )}
       </div>
       <StatusBar />
+
+      {/* User identity dialog */}
+      {userSettingsOpen && <UserSettingsDialog onClose={() => setUserSettingsOpen(false)} />}
 
       {/* KaTeX / Mermaid edit dialogs */}
       {nodeEdit && nodeEdit.nodeType !== 'mermaidBlock' && (
