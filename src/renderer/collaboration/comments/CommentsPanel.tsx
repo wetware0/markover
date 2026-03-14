@@ -15,7 +15,7 @@ export function CommentsPanel({ onNavigateToComment, onDeleteComment }: Comments
   const filtered = filter === 'all' ? comments : comments.filter((c) => c.status === filter);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200">
           <MessageSquare size={16} />
