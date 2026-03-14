@@ -13,19 +13,23 @@ export const MarkovHighlight = Mark.create({
   name: 'markovHighlight',
   inclusive: false,
   excludes: '',
+  priority: 110,
 
   addAttributes() {
     return {
       commentId: {
         default: null,
         parseHTML: (el) => el.getAttribute('data-comment-id'),
-        renderHTML: (attrs) => ({ 'data-comment-id': attrs.commentId }),
+        renderHTML: (attrs) => ({ 'data-markov': 'hl', 'data-comment-id': attrs.commentId }),
       },
     };
   },
 
   parseHTML() {
-    return [{ tag: 'span[data-comment-id]' }];
+    return [
+      { tag: 'span[data-markov="hl"]' },
+      { tag: 'span[data-comment-id]' },  // backwards compat
+    ];
   },
 
   renderHTML({ HTMLAttributes }) {

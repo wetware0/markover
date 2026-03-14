@@ -348,22 +348,27 @@ function getMarkWrapper(mark: Mark): { open: string; close: string } | null {
         close: `](${href}${title ? ` "${title}"` : ''})`,
       };
     }
-    case 'highlight':
-      return { open: '==', close: '==' };
+    case 'highlight': {
+      const color = mark.attrs.color as string | null;
+      if (color) {
+        return { open: `<mark data-color="${color}" style="background-color:${color};color:inherit">`, close: '</mark>' };
+      }
+      return { open: '<mark>', close: '</mark>' };
+    }
     case 'markovHighlight':
       return {
-        open: `<!-- markover:hl-start id="${mark.attrs.commentId}" -->`,
-        close: `<!-- markover:hl-end id="${mark.attrs.commentId}" -->`,
+        open: `<span data-markov="hl" data-comment-id="${mark.attrs.commentId}">`,
+        close: `</span>`,
       };
     case 'markovInsert':
       return {
-        open: `<!-- markover:ins-start id="${mark.attrs.changeId}" author="${mark.attrs.author}" date="${mark.attrs.date}" -->`,
-        close: `<!-- markover:ins-end id="${mark.attrs.changeId}" -->`,
+        open: `<span data-markov="ins" data-change-id="${mark.attrs.changeId}" data-author="${mark.attrs.author}" data-date="${mark.attrs.date}">`,
+        close: `</span>`,
       };
     case 'markovDelete':
       return {
-        open: `<!-- markover:del-start id="${mark.attrs.changeId}" author="${mark.attrs.author}" date="${mark.attrs.date}" -->`,
-        close: `<!-- markover:del-end id="${mark.attrs.changeId}" -->`,
+        open: `<span data-markov="del" data-change-id="${mark.attrs.changeId}" data-author="${mark.attrs.author}" data-date="${mark.attrs.date}">`,
+        close: `</span>`,
       };
     default:
       return null;

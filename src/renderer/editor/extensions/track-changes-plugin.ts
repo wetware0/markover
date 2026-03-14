@@ -16,11 +16,17 @@ export const TrackChangesPlugin = Extension.create({
     return {
       enabled: false,
       author: 'User',
+      // Grouping state: reuse the same changeId for consecutive characters
+      // typed at adjacent positions, so "hello" becomes one tracked change
+      // rather than five separate ones.
+      currentInsertId: null as string | null,
+      lastInsertEnd: null as number | null,
     };
   },
 
   addProseMirrorPlugins() {
-    const extension = this;
+    const editor = this.editor;
+    const extensionName = this.name;
 
     return [
       new Plugin({
@@ -31,23 +37,24 @@ export const TrackChangesPlugin = Extension.create({
             return { enabled: false, author: 'User' };
           },
           apply(): TrackChangesPluginState {
-            return {
-              enabled: extension.storage.enabled,
-              author: extension.storage.author,
-            };
+            const s = editor.storage[extensionName] as TrackChangesPluginState;
+            return { enabled: s.enabled, author: s.author };
           },
         },
 
         appendTransaction(transactions, oldState, newState) {
-          if (!extension.storage.enabled) return null;
+          const storage = editor.storage[extensionName] as TrackChangesPluginState & {
+            currentInsertId: string | null;
+            lastInsertEnd: number | null;
+          };
+          if (!storage.enabled) return null;
 
-          // Only intercept user-initiated transactions with doc changes
           const userTx = transactions.find(
             (tr) => tr.docChanged && !tr.getMeta('trackChangesProcessed'),
           );
           if (!userTx) return null;
 
-          const author = extension.storage.author;
+          const author = storage.author;
           const date = new Date().toISOString().split('T')[0];
           const tr = newState.tr;
           tr.setMeta('trackChangesProcessed', true);
@@ -60,9 +67,19 @@ export const TrackChangesPlugin = Extension.create({
               const adjNewStart = newStart + insertionOffset;
               const adjNewEnd = newEnd + insertionOffset;
 
-              // Text was inserted (new content in the diff range)
+              // Text was inserted — group consecutive keystrokes into one change
               if (newEnd > newStart) {
-                const changeId = nanoid(8);
+                let changeId: string;
+                if (storage.currentInsertId && storage.lastInsertEnd === newStart) {
+                  // Continuation of an existing insert run — reuse the same id
+                  changeId = storage.currentInsertId;
+                } else {
+                  // New insert run (cursor moved, deletion intervened, etc.)
+                  changeId = nanoid(8);
+                }
+                storage.currentInsertId = changeId;
+                storage.lastInsertEnd = newEnd;
+
                 const insertMark = newState.schema.marks.markovInsert.create({
                   changeId,
                   author,
@@ -72,8 +89,10 @@ export const TrackChangesPlugin = Extension.create({
                 hasChanges = true;
               }
 
-              // Text was deleted (old content was removed)
+              // Text was deleted — break the insert grouping run
               if (oldEnd > oldStart) {
+                storage.currentInsertId = null;
+                storage.lastInsertEnd = null;
                 try {
                   const deletedText = oldState.doc.textBetween(oldStart, oldEnd, '\n');
                   if (deletedText) {
@@ -89,7 +108,7 @@ export const TrackChangesPlugin = Extension.create({
                     hasChanges = true;
                   }
                 } catch {
-                  // Skip if can't read deleted text (e.g., structural changes)
+                  // Skip structural changes (e.g. node splits)
                 }
               }
             });

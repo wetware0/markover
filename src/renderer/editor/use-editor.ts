@@ -110,12 +110,20 @@ export function useMarkoverEditor() {
       if (!editor) return;
       isLoadingRef.current = true;
 
+      // Temporarily disable track changes so the plugin doesn't treat the
+      // entire setContent transaction as a user insertion and mark everything green.
+      const tcStorage = editor.storage.trackChangesPlugin as Record<string, unknown> | undefined;
+      const tcWasEnabled = tcStorage?.enabled;
+      if (tcStorage) tcStorage.enabled = false;
+
       // Parse out markover metadata, get clean markdown
       const { cleanMarkdown, metadata } = parseMarkoverFile(rawMarkdown);
       metadataRef.current = metadata;
 
       const html = markdownToHtml(cleanMarkdown);
       editor.commands.setContent(html);
+
+      if (tcStorage) tcStorage.enabled = tcWasEnabled;
       isLoadingRef.current = false;
       setDirty(false);
     },

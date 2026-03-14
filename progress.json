@@ -53,8 +53,9 @@
         { "id": "4.2", "name": "Comments sidebar panel with threads", "status": "done" },
         { "id": "4.3", "name": "Comment highlight marks in editor", "status": "done" },
         { "id": "4.4", "name": "Comment status (open/resolved/pending)", "status": "done" },
-        { "id": "4.5", "name": "Fix highlight offset tracking", "status": "done", "notes": "Replaced offset-based approach with inline markers in markdown. Marks serialize as HTML comments and parse back via markdown-it post-processing." },
-        { "id": "4.6", "name": "Comment metadata round-tripping via codec", "status": "done", "notes": "Highlights embedded inline in markdown. Codec only handles comment thread metadata." }
+        { "id": "4.5", "name": "Fix highlight offset tracking", "status": "done", "notes": "Marks serialize as <span data-markov='hl' data-comment-id='...'> inline HTML (not HTML comments). Vite HMR watch excludes .md files to prevent page reload on save." },
+        { "id": "4.6", "name": "Comment metadata round-tripping via codec", "status": "done", "notes": "Inline highlight markers survive round-trip. Comment thread metadata appended as markover:comment blocks at end of file." },
+        { "id": "4.7", "name": "Replace window.prompt with inline dialog", "status": "done", "notes": "window.prompt() was unreliable in Electron. Replaced with a React modal that preserves editor selection." }
       ]
     },
     {
@@ -68,9 +69,11 @@
         { "id": "5.4", "name": "Track changes sidebar panel (accept/reject UI)", "status": "done" },
         { "id": "5.5", "name": "Plugin intercepting transactions for insertions", "status": "done" },
         { "id": "5.6", "name": "Deletion tracking in plugin", "status": "done", "notes": "Plugin reads deleted text from oldState and re-inserts with markovDelete mark." },
-        { "id": "5.7", "name": "Track change marks serialized to markdown", "status": "done", "notes": "Serializer emits inline HTML comments for markovInsert/markovDelete marks." },
-        { "id": "5.8", "name": "Track change marks parsed from markdown", "status": "done", "notes": "Parser post-processes HTML comments to ins/del elements, TipTap parseHTML picks them up." },
-        { "id": "5.9", "name": "Accept/reject functionality", "status": "done", "notes": "Accept insertion keeps text, accept deletion removes it. Reject insertion removes text, reject deletion keeps it. Transactions flagged with trackChangesProcessed." }
+        { "id": "5.7", "name": "Track change marks serialized to markdown", "status": "done", "notes": "Serializer emits <span data-markov='ins/del' ...> spans. Avoids <ins>/<del> which conflicted with TipTap's Strike extension." },
+        { "id": "5.8", "name": "Track change marks parsed from markdown", "status": "done", "notes": "span[data-markov='ins/del'] parseHTML rules with priority:110. Backwards-compatible rules for old ins/del format." },
+        { "id": "5.9", "name": "Accept/reject functionality", "status": "done", "notes": "Accept insertion keeps text, accept deletion removes it. Reject insertion removes text, reject deletion keeps it." },
+        { "id": "5.10", "name": "Group consecutive insertions into one tracked change", "status": "done", "notes": "Plugin reuses changeId when typed characters are adjacent (lastInsertEnd === newStart). Resets on cursor move or deletion." },
+        { "id": "5.11", "name": "Fix TipTap extension.storage getter bug", "status": "done", "notes": "TipTap 3's extension.storage getter returns a new copy on every access. Plugin now reads/writes via editor.storage[extensionName] (persistent extensionStorage)." }
       ]
     },
     {
@@ -87,7 +90,7 @@
     {
       "id": "phase-7",
       "name": "Print and Export",
-      "status": "done",
+      "status": "in-progress",
       "tasks": [
         { "id": "7.1", "name": "PDF export via Electron printToPDF", "status": "done" },
         { "id": "7.2", "name": "Print support", "status": "done" },
@@ -97,10 +100,10 @@
     {
       "id": "phase-8",
       "name": "Highlighting",
-      "status": "in-progress",
+      "status": "done",
       "tasks": [
-        { "id": "8.1", "name": "General-purpose text highlighting (==...== syntax)", "status": "in-progress", "notes": "TipTap Highlight extension configured, serializer has == wrapper, but no dedicated toolbar button. Currently only used via comment system." },
-        { "id": "8.2", "name": "Toolbar button for standalone highlighting", "status": "not-started" }
+        { "id": "8.1", "name": "General-purpose text highlighting", "status": "done", "notes": "TipTap Highlight extension. Serializes as <mark> (not ==...==) so round-trip works through markdown-it." },
+        { "id": "8.2", "name": "Toolbar button for standalone highlighting", "status": "done", "notes": "Highlighter icon in toolbar applies the highlight mark." }
       ]
     },
     {

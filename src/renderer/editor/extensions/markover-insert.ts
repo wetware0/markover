@@ -11,15 +11,16 @@ declare module '@tiptap/core' {
 
 export const MarkovInsert = Mark.create({
   name: 'markovInsert',
-  inclusive: true,
+  inclusive: false,
   excludes: '',
+  priority: 110,
 
   addAttributes() {
     return {
       changeId: {
         default: null,
         parseHTML: (el) => el.getAttribute('data-change-id'),
-        renderHTML: (attrs) => ({ 'data-change-id': attrs.changeId }),
+        renderHTML: (attrs) => ({ 'data-markov': 'ins', 'data-change-id': attrs.changeId }),
       },
       author: {
         default: '',
@@ -35,11 +36,14 @@ export const MarkovInsert = Mark.create({
   },
 
   parseHTML() {
-    return [{ tag: 'ins[data-change-id]' }];
+    return [
+      { tag: 'span[data-markov="ins"]' },
+      { tag: 'ins[data-change-id]' },  // backwards compat
+    ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['ins', mergeAttributes(HTMLAttributes, { class: 'markover-insert' }), 0];
+    return ['span', mergeAttributes(HTMLAttributes, { class: 'markover-insert' }), 0];
   },
 
   addCommands() {

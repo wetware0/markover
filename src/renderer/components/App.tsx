@@ -13,6 +13,12 @@ import { MessageSquare, GitCompare, X } from 'lucide-react';
 
 type SidebarTab = 'comments' | 'changes';
 
+interface PendingComment {
+  from: number;
+  to: number;
+  commentId: string;
+}
+
 export function App() {
   const { editor, loadContent, getMarkdown, getMetadata, setMetadata } = useMarkoverEditor();
   const { filePath, setFile, setDirty } = useEditorStore();
@@ -20,14 +26,16 @@ export function App() {
   const { enabled: trackChangesEnabled, setEnabled: setTrackChangesEnabled, changes, setChanges, removeChange } = useTrackChangesStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('comments');
+  const [pendingComment, setPendingComment] = useState<PendingComment | null>(null);
+  const [commentText, setCommentText] = useState('');
 
-  // Sync track changes enabled state to the ProseMirror plugin
+  // Sync track changes enabled state to the ProseMirror plugin via the
+  // persistent editor.storage (editor.extensionStorage), not extension.storage
+  // which returns a new object copy on every getter access.
   useEffect(() => {
     if (!editor) return;
-    const plugin = editor.extensionManager.extensions.find((e) => e.name === 'trackChangesPlugin');
-    if (plugin) {
-      (plugin.storage as Record<string, unknown>).enabled = trackChangesEnabled;
-    }
+    const s = editor.storage.trackChangesPlugin as Record<string, unknown> | undefined;
+    if (s) s.enabled = trackChangesEnabled;
   }, [editor, trackChangesEnabled]);
 
   // Sync comments store → metadata ref before save
@@ -69,22 +77,31 @@ export function App() {
     setChanges([]);
   }, [loadContent, setFile, setComments, setChanges]);
 
-  // Add comment to selected text
+  // Add comment to selected text — opens an inline dialog instead of window.prompt()
   const handleAddComment = useCallback(() => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
     if (from === to) return;
+    setPendingComment({ from, to, commentId: nanoid(8) });
+    setCommentText('');
+  }, [editor]);
 
-    const commentId = nanoid(8);
-    const content = window.prompt('Add a comment:');
-    if (!content) return;
-
-    editor.chain().focus().setMarkovHighlight({ commentId }).run();
-    addComment(commentId, content);
-
+  const handleSubmitComment = useCallback(() => {
+    if (!editor || !pendingComment || !commentText.trim()) return;
+    const { from, to, commentId } = pendingComment;
+    editor.chain().focus().setTextSelection({ from, to }).setMarkovHighlight({ commentId }).run();
+    addComment(commentId, commentText.trim());
+    setPendingComment(null);
+    setCommentText('');
     setSidebarOpen(true);
     setSidebarTab('comments');
-  }, [editor, addComment]);
+  }, [editor, pendingComment, commentText, addComment]);
+
+  const handleCancelComment = useCallback(() => {
+    setPendingComment(null);
+    setCommentText('');
+    editor?.chain().focus().run();
+  }, [editor]);
 
   // Delete comment
   const handleDeleteComment = useCallback(
@@ -263,9 +280,15 @@ export function App() {
         case 'blockquote': editor.chain().focus().toggleBlockquote().run(); break;
         case 'horizontal-rule': editor.chain().focus().setHorizontalRule().run(); break;
         case 'add-comment': handleAddComment(); break;
-        case 'toggle-track-changes':
-          setTrackChangesEnabled(!trackChangesEnabled);
+        case 'toggle-track-changes': {
+          const next = !trackChangesEnabled;
+          setTrackChangesEnabled(next);
+          if (next) {
+            setSidebarOpen(true);
+            setSidebarTab('changes');
+          }
           break;
+        }
         case 'print':
           window.electronAPI.print();
           break;
@@ -284,7 +307,14 @@ export function App() {
         onAddComment={handleAddComment}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         trackChangesEnabled={trackChangesEnabled}
-        onToggleTrackChanges={() => setTrackChangesEnabled(!trackChangesEnabled)}
+        onToggleTrackChanges={() => {
+          const next = !trackChangesEnabled;
+          setTrackChangesEnabled(next);
+          if (next) {
+            setSidebarOpen(true);
+            setSidebarTab('changes');
+          }
+        }}
       />
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
@@ -351,6 +381,44 @@ export function App() {
         )}
       </div>
       <StatusBar />
+
+      {/* Inline comment dialog — replaces window.prompt() which is unreliable in Electron */}
+      {pendingComment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-5 w-96 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-3">Add Comment</h3>
+            <textarea
+              autoFocus
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitComment(); }
+                if (e.key === 'Escape') handleCancelComment();
+              }}
+              placeholder="Write a comment…"
+              rows={3}
+              className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                type="button"
+                onClick={handleCancelComment}
+                className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitComment}
+                disabled={!commentText.trim()}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Add Comment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,4 +10,12 @@ export default defineConfig({
   esbuild: {
     jsx: 'automatic',
   },
+  server: {
+    watch: {
+      // Don't hot-reload when markdown files are saved — user documents
+      // saved anywhere in the project directory were triggering page reloads
+      // and wiping editor state.
+      ignored: ['**/*.md', '**/*.markdown', '**/*.txt'],
+    },
+  },
 });

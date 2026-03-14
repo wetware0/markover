@@ -13,13 +13,14 @@ export const MarkovDelete = Mark.create({
   name: 'markovDelete',
   inclusive: false,
   excludes: '',
+  priority: 110,
 
   addAttributes() {
     return {
       changeId: {
         default: null,
         parseHTML: (el) => el.getAttribute('data-change-id'),
-        renderHTML: (attrs) => ({ 'data-change-id': attrs.changeId }),
+        renderHTML: (attrs) => ({ 'data-markov': 'del', 'data-change-id': attrs.changeId }),
       },
       author: {
         default: '',
@@ -35,11 +36,14 @@ export const MarkovDelete = Mark.create({
   },
 
   parseHTML() {
-    return [{ tag: 'del[data-change-id]' }];
+    return [
+      { tag: 'span[data-markov="del"]' },
+      { tag: 'del[data-change-id]' },  // backwards compat
+    ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['del', mergeAttributes(HTMLAttributes, { class: 'markover-delete' }), 0];
+    return ['span', mergeAttributes(HTMLAttributes, { class: 'markover-delete' }), 0];
   },
 
   addCommands() {
