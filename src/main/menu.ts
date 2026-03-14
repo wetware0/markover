@@ -65,6 +65,11 @@ export function buildMenu(window: BrowserWindow, onFileOpened?: (filePath: strin
           label: 'Export PDF...',
           click: () => sendAction('export-pdf'),
         },
+        {
+          label: 'Publish...',
+          accelerator: 'CmdOrCtrl+Shift+P',
+          click: () => sendAction('publish'),
+        },
         { type: 'separator' },
         { role: 'quit' },
       ],

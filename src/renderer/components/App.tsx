@@ -3,6 +3,7 @@ import { EditorContent } from '@tiptap/react';
 import { nanoid } from 'nanoid';
 import { useMarkoverEditor } from '../editor/use-editor';
 import { useEditorStore } from '../store/editor-store';
+import { parseMarkoverFile } from '../../shared/markover-codec';
 import { useCommentsStore } from '../collaboration/comments/comment-store';
 import { useTrackChangesStore } from '../collaboration/track-changes/track-changes-store';
 import { useThemeStore } from '../store/theme-store';
@@ -98,6 +99,26 @@ export function App() {
       setDirty(false);
     }
   }, [isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata]);
+
+  const handlePublish = useCallback(async () => {
+    let rawMd: string;
+    if (isRawMode) {
+      rawMd = rawContentRef.current;
+    } else {
+      syncCommentsToMetadata();
+      rawMd = getMarkdown();
+    }
+    // Strip markover comment blocks at the end of the file
+    const { cleanMarkdown } = parseMarkoverFile(rawMd);
+    // Accept insertions (keep text), remove comment highlights (keep text)
+    let published = cleanMarkdown.replace(
+      /<span data-markov="(?:ins|hl)"[^>]*>([\s\S]*?)<\/span>/g,
+      '$1',
+    );
+    // Accept deletions (remove text)
+    published = published.replace(/<span data-markov="del"[^>]*>[\s\S]*?<\/span>/g, '');
+    await window.electronAPI.saveFileAs(published);
+  }, [isRawMode, getMarkdown, syncCommentsToMetadata]);
 
   const handleNew = useCallback(() => {
     if (isRawMode) {
@@ -323,6 +344,7 @@ export function App() {
           }
           break;
         }
+        case 'publish': handlePublish(); break;
         case 'print':
           // Switch to WYSIWYG first so TipTap's rendered view is printed
           if (isRawMode) handleToggleRawMode();
@@ -335,7 +357,7 @@ export function App() {
       }
     });
     return unsubscribe;
-  }, [editor, isRawMode, handleNew, handleSave, handleSaveAs, handleToggleRawMode, handleAddComment, trackChangesEnabled, setTrackChangesEnabled]);
+  }, [editor, isRawMode, handleNew, handleSave, handleSaveAs, handlePublish, handleToggleRawMode, handleAddComment, trackChangesEnabled, setTrackChangesEnabled]);
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">

@@ -1,7 +1,7 @@
 {
   "project": "Markover",
   "description": "Markdown WYSIWYG editor with Word-like collaboration features",
-  "lastUpdated": "2026-03-14",
+  "lastUpdated": "2026-03-14 (publish)",
   "phases": [
     {
       "id": "phase-1",
@@ -90,11 +90,11 @@
     {
       "id": "phase-7",
       "name": "Print and Export",
-      "status": "in-progress",
+      "status": "done",
       "tasks": [
         { "id": "7.1", "name": "PDF export via Electron printToPDF", "status": "done" },
         { "id": "7.2", "name": "Print support", "status": "done" },
-        { "id": "7.3", "name": "Publish: export clean markdown without markover metadata", "status": "not-started", "notes": "File > Publish saves plain markdown (no HTML comments, no comment blocks) to a new file. Strips all markover markers, accepts all track changes, removes comment highlights." }
+        { "id": "7.3", "name": "Publish: export clean markdown without markover metadata", "status": "done", "notes": "File > Publish (Ctrl+Shift+P) saves plain markdown to a new file. Uses parseMarkoverFile to strip comment blocks, then regex to accept all track changes (ins=keep, del=remove) and remove comment highlights." }
       ]
     },
     {
