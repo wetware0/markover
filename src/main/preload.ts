@@ -26,6 +26,7 @@ const api: ElectronAPI = {
     ipcRenderer.invoke(IPC_CHANNELS.SPELLCHECK_SET_LANGUAGES, languages),
   spellcheckAddWord: (word: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.SPELLCHECK_ADD_WORD, word),
+  getOsUsername: () => ipcRenderer.invoke(IPC_CHANNELS.GET_OS_USERNAME),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

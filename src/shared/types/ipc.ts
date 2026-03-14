@@ -23,6 +23,7 @@ export const IPC_CHANNELS = {
   PRINT: 'print:print',
   EXPORT_PDF: 'print:export-pdf',
   CONFIRM_CLOSE: 'app:confirm-close',
+  GET_OS_USERNAME: 'os:get-username',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -40,6 +41,7 @@ export interface ElectronAPI {
   print: () => Promise<void>;
   exportPdf: () => Promise<{ success: boolean; filePath?: string } | null>;
   confirmClose: () => void;
+  getOsUsername: () => Promise<string>;
 }
 
 declare global {

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, session } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import started from 'electron-squirrel-startup';
 import { IPC_CHANNELS } from '../shared/types/ipc';
 import { buildMenu } from './menu';
@@ -291,6 +292,14 @@ ipcMain.handle(IPC_CHANNELS.SPELLCHECK_SET_LANGUAGES, (_event, languages: string
 
 ipcMain.handle(IPC_CHANNELS.SPELLCHECK_ADD_WORD, (_event, word: string) => {
   session.defaultSession.addWordToSpellCheckerDictionary(word);
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_OS_USERNAME, () => {
+  try {
+    return os.userInfo().username;
+  } catch {
+    return '';
+  }
 });
 
 app.on('ready', createWindow);

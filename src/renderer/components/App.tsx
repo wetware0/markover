@@ -35,7 +35,7 @@ export function App() {
   const { setComments, comments, addComment, deleteComment: removeComment } = useCommentsStore();
   const { enabled: trackChangesEnabled, setEnabled: setTrackChangesEnabled, changes, setChanges, removeChange } = useTrackChangesStore();
   const { resolved: resolvedTheme } = useThemeStore();
-  const { name: userName } = useUserStore();
+  const { name: userName, setName } = useUserStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userSettingsOpen, setUserSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -60,6 +60,15 @@ export function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  // Seed author name from OS login on first launch (only if no name persisted)
+  useEffect(() => {
+    if (!userName.trim()) {
+      window.electronAPI.getOsUsername()
+        .then((username) => { if (username) setName(username); })
+        .catch(() => { /* ignore errors */ });
+    }
+  }, []); // eslint-disable-line
 
   // Warn before window close when dirty (main process shows native dialog)
   useEffect(() => {
