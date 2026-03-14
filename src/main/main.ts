@@ -139,6 +139,26 @@ const createWindow = async () => {
     }
   });
 
+  // Guard: warn before close if renderer signals unsaved changes via beforeunload
+  mainWindow.webContents.on('will-prevent-unload', async (event) => {
+    event.preventDefault(); // Let us handle it
+    const { response } = await dialog.showMessageBox(mainWindow!, {
+      type: 'question',
+      buttons: ['Save & Close', 'Close Without Saving', 'Cancel'],
+      defaultId: 0,
+      cancelId: 2,
+      message: 'You have unsaved changes',
+      detail: 'Do you want to save your changes before closing?',
+    });
+    if (response === 0) {
+      // Ask renderer to save, then signal back to close
+      mainWindow?.webContents.send(IPC_CHANNELS.MENU_ACTION, 'save-and-close');
+    } else if (response === 1) {
+      mainWindow?.destroy();
+    }
+    // response === 2: cancel — do nothing
+  });
+
   // Open CLI file after renderer is ready
   const cliFile = getCliFilePath();
   if (cliFile) {
@@ -246,6 +266,11 @@ ipcMain.handle(IPC_CHANNELS.EXPORT_PDF, async () => {
   } catch {
     return { success: false };
   }
+});
+
+// Renderer signals that save is done and the window can now close
+ipcMain.on(IPC_CHANNELS.CONFIRM_CLOSE, () => {
+  mainWindow?.destroy();
 });
 
 // Spellcheck IPC

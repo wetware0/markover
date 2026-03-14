@@ -22,6 +22,7 @@ export const IPC_CHANNELS = {
   SPELLCHECK_ADD_WORD: 'spellcheck:add-word',
   PRINT: 'print:print',
   EXPORT_PDF: 'print:export-pdf',
+  CONFIRM_CLOSE: 'app:confirm-close',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -38,6 +39,7 @@ export interface ElectronAPI {
   spellcheckAddWord: (word: string) => Promise<void>;
   print: () => Promise<void>;
   exportPdf: () => Promise<{ success: boolean; filePath?: string } | null>;
+  confirmClose: () => void;
 }
 
 declare global {

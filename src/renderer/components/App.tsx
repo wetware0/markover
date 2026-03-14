@@ -30,7 +30,7 @@ interface PendingComment {
 
 export function App() {
   const { editor, loadContent, getMarkdown, getMetadata, setMetadata } = useMarkoverEditor();
-  const { filePath, setFile, setDirty, isRawMode, setRawMode } = useEditorStore();
+  const { filePath, isDirty, setFile, setDirty, isRawMode, setRawMode } = useEditorStore();
   const { setComments, comments, addComment, deleteComment: removeComment } = useCommentsStore();
   const { enabled: trackChangesEnabled, setEnabled: setTrackChangesEnabled, changes, setChanges, removeChange } = useTrackChangesStore();
   const { resolved: resolvedTheme } = useThemeStore();
@@ -42,6 +42,8 @@ export function App() {
   const [commentText, setCommentText] = useState('');
   // Raw editor content — use a ref so CodeMirror doesn't lose cursor on each keystroke
   const rawContentRef = useRef('');
+  // Pending action waiting for "unsaved changes" confirmation
+  const [discardConfirm, setDiscardConfirm] = useState<{ message: string; onProceed: () => void } | null>(null);
 
   // Node edit state (KaTeX / Mermaid click-to-edit dialogs)
   type NodeEdit =
@@ -49,6 +51,24 @@ export function App() {
     | { nodeType: 'mermaidBlock'; code: string; getPos: () => number | undefined }
     | { nodeType: 'image'; src: string; alt: string; width: string; getPos: () => number | undefined };
   const [nodeEdit, setNodeEdit] = useState<NodeEdit | null>(null);
+
+  // Warn before window close when dirty (main process shows native dialog)
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) e.returnValue = ''; // Triggers will-prevent-unload in main process
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
+  // Helper: if dirty, show confirmation dialog before proceeding
+  const guardDirty = useCallback((message: string, onProceed: () => void) => {
+    if (isDirty) {
+      setDiscardConfirm({ message, onProceed });
+    } else {
+      onProceed();
+    }
+  }, [isDirty]);
 
   // Sync user name to comments store and track changes plugin
   useEffect(() => {
@@ -145,16 +165,17 @@ export function App() {
     await window.electronAPI.saveFileAs(published);
   }, [isRawMode, getMarkdown, syncCommentsToMetadata]);
 
-  const handleNew = useCallback(() => {
-    if (isRawMode) {
-      rawContentRef.current = '';
-      setRawMode(false);
-    }
+  const doNew = useCallback(() => {
+    if (isRawMode) { rawContentRef.current = ''; setRawMode(false); }
     loadContent('');
     setFile(null, 'Untitled');
     setComments([]);
     setChanges([]);
   }, [isRawMode, loadContent, setFile, setComments, setChanges, setRawMode]);
+
+  const handleNew = useCallback(() => {
+    guardDirty('You have unsaved changes. Create a new document anyway?', doNew);
+  }, [guardDirty, doNew]);
 
   // Add comment to selected text — opens an inline dialog instead of window.prompt()
   const handleAddComment = useCallback(() => {
@@ -366,16 +387,23 @@ export function App() {
       switch (action) {
         case 'new': handleNew(); break;
         case 'open': {
-          const data = await window.electronAPI.openFile();
-          if (data) {
-            setRawMode(false);
-            rawContentRef.current = '';
-            loadContent(data.content);
-            setFile(data.filePath, data.fileName);
-            setComments(getMetadata().comments);
-          }
+          const doOpen = async () => {
+            const data = await window.electronAPI.openFile();
+            if (data) {
+              setRawMode(false);
+              rawContentRef.current = '';
+              loadContent(data.content);
+              setFile(data.filePath, data.fileName);
+              setComments(getMetadata().comments);
+            }
+          };
+          guardDirty('You have unsaved changes. Open a different file anyway?', () => { void doOpen(); });
           break;
         }
+        case 'save-and-close':
+          await handleSave();
+          window.electronAPI.confirmClose();
+          break;
         case 'save': handleSave(); break;
         case 'save-as': handleSaveAs(); break;
         case 'toggle-raw': handleToggleRawMode(); break;
@@ -502,6 +530,39 @@ export function App() {
         )}
       </div>
       <StatusBar />
+
+      {/* Unsaved changes confirmation */}
+      {discardConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-5 w-96 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2">Unsaved Changes</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{discardConfirm.message}</p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDiscardConfirm(null)}
+                className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { discardConfirm.onProceed(); setDiscardConfirm(null); }}
+                className="px-3 py-1.5 text-sm text-red-600 border border-red-300 hover:bg-red-50 dark:hover:bg-red-950 rounded"
+              >
+                Discard Changes
+              </button>
+              <button
+                type="button"
+                onClick={async () => { await handleSave(); discardConfirm.onProceed(); setDiscardConfirm(null); }}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* User identity dialog */}
       {userSettingsOpen && <UserSettingsDialog onClose={() => setUserSettingsOpen(false)} />}

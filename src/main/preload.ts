@@ -18,6 +18,7 @@ const api: ElectronAPI = {
     ipcRenderer.on(IPC_CHANNELS.FILE_CHANGED, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.FILE_CHANGED, handler);
   },
+  confirmClose: () => ipcRenderer.send(IPC_CHANNELS.CONFIRM_CLOSE),
   print: () => ipcRenderer.invoke(IPC_CHANNELS.PRINT),
   exportPdf: () => ipcRenderer.invoke(IPC_CHANNELS.EXPORT_PDF),
   spellcheckGetLanguages: () => ipcRenderer.invoke(IPC_CHANNELS.SPELLCHECK_GET_LANGUAGES),
