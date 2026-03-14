@@ -23,9 +23,9 @@
       "tasks": [
         { "id": "2.1", "name": "Markdown round-tripping (parser + serializer)", "status": "done" },
         { "id": "2.2", "name": "KaTeX inline/block rendering", "status": "done" },
-        { "id": "2.3", "name": "KaTeX inline/block WYSIWYG editing", "status": "not-started", "notes": "Currently view-only, atom:true, contentEditable:false. Need click-to-edit dialog or inline source editing." },
+        { "id": "2.3", "name": "KaTeX inline/block WYSIWYG editing", "status": "done", "notes": "Double-click opens KatexEditDialog with live KaTeX preview. Saves via setNodeMarkup." },
         { "id": "2.4", "name": "Mermaid diagram rendering", "status": "done" },
-        { "id": "2.5", "name": "Mermaid diagram WYSIWYG editing", "status": "not-started", "notes": "Currently view-only, atom:true, contentEditable:false. Need click-to-edit dialog with live preview." },
+        { "id": "2.5", "name": "Mermaid diagram WYSIWYG editing", "status": "done", "notes": "Double-click opens MermaidEditDialog with side-by-side live preview. Saves via setNodeMarkup." },
         { "id": "2.6", "name": "Footnotes", "status": "done" },
         { "id": "2.7", "name": "YAML front matter", "status": "done" },
         { "id": "2.8", "name": "Image drop/paste insertion", "status": "done" },

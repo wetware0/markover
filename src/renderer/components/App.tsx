@@ -12,6 +12,8 @@ import { StatusBar } from '../ui/statusbar/StatusBar';
 import { CommentsPanel } from '../collaboration/comments/CommentsPanel';
 import { TrackChangesPanel } from '../collaboration/track-changes/TrackChangesPanel';
 import { RawEditor } from '../editor/RawEditor';
+import { KatexEditDialog } from '../ui/dialogs/KatexEditDialog';
+import { MermaidEditDialog } from '../ui/dialogs/MermaidEditDialog';
 import { MessageSquare, GitCompare, X } from 'lucide-react';
 
 type SidebarTab = 'comments' | 'changes';
@@ -34,6 +36,12 @@ export function App() {
   const [commentText, setCommentText] = useState('');
   // Raw editor content — use a ref so CodeMirror doesn't lose cursor on each keystroke
   const rawContentRef = useRef('');
+
+  // Node edit state (KaTeX / Mermaid click-to-edit dialogs)
+  type NodeEdit =
+    | { nodeType: 'katexInline' | 'katexBlock'; math: string; getPos: () => number | undefined }
+    | { nodeType: 'mermaidBlock'; code: string; getPos: () => number | undefined };
+  const [nodeEdit, setNodeEdit] = useState<NodeEdit | null>(null);
 
   // Sync track changes enabled state to the ProseMirror plugin via the
   // persistent editor.storage (editor.extensionStorage), not extension.storage
@@ -305,6 +313,23 @@ export function App() {
     return () => { editor.off('update', scan); };
   }, [editor, setChanges]);
 
+  // Listen for dblclick-to-edit events from KaTeX / Mermaid node views
+  useEffect(() => {
+    const handler = (e: Event) => {
+      setNodeEdit((e as CustomEvent).detail as NodeEdit);
+    };
+    document.addEventListener('markover:edit-node', handler);
+    return () => document.removeEventListener('markover:edit-node', handler);
+  }, []);
+
+  const handleNodeEditSave = useCallback((newAttrs: Record<string, string>) => {
+    if (!nodeEdit || !editor) return;
+    const pos = nodeEdit.getPos();
+    if (pos === undefined) return;
+    editor.view.dispatch(editor.state.tr.setNodeMarkup(pos, undefined, newAttrs));
+    setNodeEdit(null);
+  }, [nodeEdit, editor]);
+
   // Handle file opened from main process (File > Open menu)
   useEffect(() => {
     const unsubscribe = window.electronAPI.onFileChanged((data) => {
@@ -447,6 +472,23 @@ export function App() {
         )}
       </div>
       <StatusBar />
+
+      {/* KaTeX / Mermaid edit dialogs */}
+      {nodeEdit && nodeEdit.nodeType !== 'mermaidBlock' && (
+        <KatexEditDialog
+          math={nodeEdit.math}
+          displayMode={nodeEdit.nodeType === 'katexBlock'}
+          onSave={(math) => handleNodeEditSave({ math })}
+          onCancel={() => setNodeEdit(null)}
+        />
+      )}
+      {nodeEdit && nodeEdit.nodeType === 'mermaidBlock' && (
+        <MermaidEditDialog
+          code={nodeEdit.code}
+          onSave={(code) => handleNodeEditSave({ code })}
+          onCancel={() => setNodeEdit(null)}
+        />
+      )}
 
       {/* Inline comment dialog — replaces window.prompt() which is unreliable in Electron */}
       {pendingComment && (

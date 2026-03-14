@@ -40,11 +40,12 @@ export const MermaidBlock = Node.create({
   },
 
   addNodeView() {
-    return ({ node, HTMLAttributes }) => {
+    return ({ node, HTMLAttributes, getPos }) => {
       const dom = document.createElement('div');
       dom.setAttribute('data-mermaid', node.attrs.code);
-      dom.classList.add('mermaid-block');
+      dom.classList.add('mermaid-block', 'markov-editable-node');
       dom.contentEditable = 'false';
+      dom.title = 'Double-click to edit';
       Object.entries(HTMLAttributes).forEach(([key, value]) => {
         if (typeof value === 'string') dom.setAttribute(key, value);
       });
@@ -63,6 +64,14 @@ export const MermaidBlock = Node.create({
           dom.innerHTML = `<pre class="mermaid-error">${code}</pre>`;
         }
       };
+
+      dom.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        document.dispatchEvent(new CustomEvent('markover:edit-node', {
+          detail: { nodeType: 'mermaidBlock', code: node.attrs.code, getPos },
+        }));
+      });
 
       renderDiagram();
       return { dom };

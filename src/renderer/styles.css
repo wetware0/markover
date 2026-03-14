@@ -165,10 +165,21 @@
   padding: 0.1em 0;
 }
 
+/* Editable atoms (KaTeX, Mermaid) — pointer cursor + hover ring */
+.ProseMirror .markov-editable-node {
+  cursor: pointer;
+  transition: outline 0.1s;
+}
+
+.ProseMirror .markov-editable-node:hover {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 /* KaTeX */
 .ProseMirror .katex-inline {
   display: inline;
-  cursor: default;
 }
 
 .ProseMirror .katex-block {
@@ -176,7 +187,6 @@
   text-align: center;
   margin: 1em 0;
   padding: 0.5em;
-  cursor: default;
 }
 
 /* Mermaid */
@@ -188,7 +198,6 @@
   background: #f9fafb;
   border-radius: 0.5em;
   border: 1px solid #e5e7eb;
-  cursor: default;
   overflow-x: auto;
 }
 

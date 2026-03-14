@@ -44,11 +44,12 @@ export const KatexBlock = Node.create({
   },
 
   addNodeView() {
-    return ({ node, HTMLAttributes }) => {
+    return ({ node, HTMLAttributes, getPos }) => {
       const dom = document.createElement('div');
       dom.setAttribute('data-katex-block', node.attrs.math);
-      dom.classList.add('katex-block');
+      dom.classList.add('katex-block', 'markov-editable-node');
       dom.contentEditable = 'false';
+      dom.title = 'Double-click to edit';
       Object.entries(HTMLAttributes).forEach(([key, value]) => {
         if (typeof value === 'string') dom.setAttribute(key, value);
       });
@@ -58,6 +59,14 @@ export const KatexBlock = Node.create({
       } catch {
         dom.textContent = node.attrs.math;
       }
+
+      dom.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        document.dispatchEvent(new CustomEvent('markover:edit-node', {
+          detail: { nodeType: 'katexBlock', math: node.attrs.math, getPos },
+        }));
+      });
 
       return { dom };
     };
