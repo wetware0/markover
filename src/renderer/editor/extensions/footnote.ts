@@ -20,7 +20,10 @@ export const FootnoteRef = Node.create({
         getAttrs: (el) => {
           const anchor = (el as HTMLElement).querySelector('a');
           const id = anchor?.getAttribute('href')?.replace('#fn', '') || '';
-          const label = anchor?.textContent || id;
+          // markdown-it-footnote wraps the number in brackets: "[1]"
+          // Strip them so the serializer can write [^1] not [^[1]]
+          const raw = anchor?.textContent || id;
+          const label = raw.replace(/^\[|\]$/g, '');
           return { id, label };
         },
       },
