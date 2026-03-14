@@ -346,9 +346,20 @@ export function App() {
 
   // Handle menu actions
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onMenuAction((action: string) => {
+    const unsubscribe = window.electronAPI.onMenuAction(async (action: string) => {
       switch (action) {
         case 'new': handleNew(); break;
+        case 'open': {
+          const data = await window.electronAPI.openFile();
+          if (data) {
+            setRawMode(false);
+            rawContentRef.current = '';
+            loadContent(data.content);
+            setFile(data.filePath, data.fileName);
+            setComments(getMetadata().comments);
+          }
+          break;
+        }
         case 'save': handleSave(); break;
         case 'save-as': handleSaveAs(); break;
         case 'toggle-raw': handleToggleRawMode(); break;

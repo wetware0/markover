@@ -10,10 +10,20 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    name: 'Markover',
+    executableName: 'Markover',
+    appVersion: '1.0.0',
+    appCopyright: `Copyright © ${new Date().getFullYear()} Peter Williams`,
   },
   rebuildConfig: {},
   makers: [
-    new MakerSquirrel({}),
+    new MakerSquirrel({
+      name: 'Markover',
+      setupExe: 'MarkoverSetup.exe',
+      setupMsi: 'MarkoverSetup.msi',
+      authors: 'Peter Williams',
+      description: 'Markdown WYSIWYG editor with Word-like collaboration features',
+    }),
     new MakerZIP({}, ['darwin']),
     new MakerRpm({}),
     new MakerDeb({}),

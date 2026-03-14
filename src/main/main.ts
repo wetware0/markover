@@ -11,8 +11,76 @@ if (started) {
 
 let mainWindow: BrowserWindow | null = null;
 let currentFilePath: string | null = null;
+let recentFiles: string[] = [];
 
-const createWindow = () => {
+const RECENT_PATH = path.join(app.getPath('userData'), 'recent-files.json');
+const MAX_RECENT = 10;
+
+// --- Recent files ---
+
+async function loadRecentFiles(): Promise<void> {
+  try {
+    const data = await fs.readFile(RECENT_PATH, 'utf-8');
+    recentFiles = JSON.parse(data) as string[];
+  } catch {
+    recentFiles = [];
+  }
+}
+
+async function addRecentFile(filePath: string): Promise<void> {
+  recentFiles = [filePath, ...recentFiles.filter((p) => p !== filePath)].slice(0, MAX_RECENT);
+  await fs.writeFile(RECENT_PATH, JSON.stringify(recentFiles), 'utf-8').catch((_err) => { /* ignore write errors */ });
+  rebuildMenu();
+}
+
+// --- Window / title ---
+
+function updateTitle() {
+  if (!mainWindow) return;
+  const fileName = currentFilePath ? path.basename(currentFilePath) : 'Untitled';
+  mainWindow.setTitle(`${fileName} — Markover`);
+}
+
+function rebuildMenu() {
+  if (!mainWindow) return;
+  Menu.setApplicationMenu(buildMenu(mainWindow, recentFiles, openFileByPath));
+}
+
+// --- Open a file (used by menu and CLI) ---
+
+async function openFileByPath(filePath: string): Promise<void> {
+  if (!mainWindow) return;
+  try {
+    const content = await fs.readFile(filePath, 'utf-8');
+    currentFilePath = filePath;
+    updateTitle();
+    await addRecentFile(filePath);
+    mainWindow.webContents.send(IPC_CHANNELS.FILE_CHANGED, {
+      filePath,
+      content,
+      fileName: path.basename(filePath),
+    });
+  } catch (err) {
+    console.error('Failed to open file:', err);
+  }
+}
+
+// --- CLI file argument ---
+
+function getCliFilePath(): string | null {
+  // dev:  argv = [electron, '.', ...userArgs]
+  // prod: argv = [markover.exe, ...userArgs]
+  const args = process.argv
+    .slice(app.isPackaged ? 1 : 2)
+    .filter((a) => !a.startsWith('--') && a !== '.');
+  return args[0] || null;
+}
+
+// --- Window creation ---
+
+const createWindow = async () => {
+  await loadRecentFiles();
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -35,10 +103,7 @@ const createWindow = () => {
     );
   }
 
-  Menu.setApplicationMenu(buildMenu(mainWindow, (filePath) => {
-    currentFilePath = filePath;
-    updateTitle();
-  }));
+  rebuildMenu();
 
   // Enable spell checking
   session.defaultSession.setSpellCheckerLanguages(['en-US']);
@@ -74,18 +139,22 @@ const createWindow = () => {
     }
   });
 
+  // Open CLI file after renderer is ready
+  const cliFile = getCliFilePath();
+  if (cliFile) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      // Small delay to let the React app mount and register its IPC listener
+      setTimeout(() => openFileByPath(cliFile), 300);
+    });
+  }
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 };
 
-function updateTitle() {
-  if (!mainWindow) return;
-  const fileName = currentFilePath ? path.basename(currentFilePath) : 'Untitled';
-  mainWindow.setTitle(`${fileName} — Markover`);
-}
-
 // IPC Handlers
+
 ipcMain.handle(IPC_CHANNELS.FILE_OPEN, async () => {
   if (!mainWindow) return null;
 
@@ -104,6 +173,7 @@ ipcMain.handle(IPC_CHANNELS.FILE_OPEN, async () => {
   const content = await fs.readFile(filePath, 'utf-8');
   currentFilePath = filePath;
   updateTitle();
+  await addRecentFile(filePath);
 
   return {
     filePath,
@@ -117,6 +187,7 @@ ipcMain.handle(IPC_CHANNELS.FILE_SAVE, async (_event, filePath: string, content:
     await fs.writeFile(filePath, content, 'utf-8');
     currentFilePath = filePath;
     updateTitle();
+    await addRecentFile(filePath);
     return { success: true, filePath };
   } catch {
     return { success: false, filePath };
@@ -140,6 +211,7 @@ ipcMain.handle(IPC_CHANNELS.FILE_SAVE_AS, async (_event, content: string) => {
     await fs.writeFile(result.filePath, content, 'utf-8');
     currentFilePath = result.filePath;
     updateTitle();
+    await addRecentFile(result.filePath);
     return { success: true, filePath: result.filePath };
   } catch {
     return null;

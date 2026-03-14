@@ -1,12 +1,26 @@
-import { Menu, BrowserWindow, dialog, type MenuItemConstructorOptions } from 'electron';
-import fs from 'node:fs/promises';
+import { Menu, BrowserWindow, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { IPC_CHANNELS } from '../shared/types/ipc';
 
-export function buildMenu(window: BrowserWindow, onFileOpened?: (filePath: string) => void): Menu {
+export function buildMenu(
+  window: BrowserWindow,
+  recentFiles: string[],
+  openFile: (filePath: string) => Promise<void>,
+): Menu {
   const sendAction = (action: string) => {
     window.webContents.send(IPC_CHANNELS.MENU_ACTION, action);
   };
+
+  const recentSubmenu: MenuItemConstructorOptions[] =
+    recentFiles.length > 0
+      ? [
+          ...recentFiles.map((filePath) => ({
+            label: path.basename(filePath),
+            sublabel: path.dirname(filePath),
+            click: () => openFile(filePath),
+          })),
+        ]
+      : [{ label: 'No Recent Files', enabled: false }];
 
   const template: MenuItemConstructorOptions[] = [
     {
@@ -20,29 +34,11 @@ export function buildMenu(window: BrowserWindow, onFileOpened?: (filePath: strin
         {
           label: 'Open...',
           accelerator: 'CmdOrCtrl+O',
-          click: async () => {
-            const result = await dialog.showOpenDialog(window, {
-              properties: ['openFile'],
-              filters: [
-                { name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd', 'mkdn'] },
-                { name: 'Text', extensions: ['txt'] },
-                { name: 'All Files', extensions: ['*'] },
-              ],
-            });
-            if (result.canceled || result.filePaths.length === 0) return;
-            const filePath = result.filePaths[0];
-            try {
-              const content = await fs.readFile(filePath, 'utf-8');
-              onFileOpened?.(filePath);
-              window.webContents.send(IPC_CHANNELS.FILE_CHANGED, {
-                filePath,
-                content,
-                fileName: path.basename(filePath),
-              });
-            } catch (err) {
-              console.error('Failed to read file:', err);
-            }
-          },
+          click: () => sendAction('open'),
+        },
+        {
+          label: 'Open Recent',
+          submenu: recentSubmenu,
         },
         { type: 'separator' },
         {
@@ -89,52 +85,23 @@ export function buildMenu(window: BrowserWindow, onFileOpened?: (filePath: strin
     {
       label: 'Format',
       submenu: [
-        {
-          label: 'Bold',
-          accelerator: 'CmdOrCtrl+B',
-          click: () => sendAction('bold'),
-        },
-        {
-          label: 'Italic',
-          accelerator: 'CmdOrCtrl+I',
-          click: () => sendAction('italic'),
-        },
-        {
-          label: 'Underline',
-          accelerator: 'CmdOrCtrl+U',
-          click: () => sendAction('underline'),
-        },
-        {
-          label: 'Strikethrough',
-          accelerator: 'CmdOrCtrl+Shift+X',
-          click: () => sendAction('strike'),
-        },
+        { label: 'Bold', accelerator: 'CmdOrCtrl+B', click: () => sendAction('bold') },
+        { label: 'Italic', accelerator: 'CmdOrCtrl+I', click: () => sendAction('italic') },
+        { label: 'Underline', accelerator: 'CmdOrCtrl+U', click: () => sendAction('underline') },
+        { label: 'Strikethrough', accelerator: 'CmdOrCtrl+Shift+X', click: () => sendAction('strike') },
         { type: 'separator' },
-        {
-          label: 'Code',
-          accelerator: 'CmdOrCtrl+E',
-          click: () => sendAction('code'),
-        },
-        {
-          label: 'Code Block',
-          accelerator: 'CmdOrCtrl+Shift+E',
-          click: () => sendAction('code-block'),
-        },
+        { label: 'Code', accelerator: 'CmdOrCtrl+E', click: () => sendAction('code') },
+        { label: 'Code Block', accelerator: 'CmdOrCtrl+Shift+E', click: () => sendAction('code-block') },
         { type: 'separator' },
-        {
-          label: 'Blockquote',
-          accelerator: 'CmdOrCtrl+Shift+B',
-          click: () => sendAction('blockquote'),
-        },
-        {
-          label: 'Horizontal Rule',
-          click: () => sendAction('horizontal-rule'),
-        },
+        { label: 'Blockquote', accelerator: 'CmdOrCtrl+Shift+B', click: () => sendAction('blockquote') },
+        { label: 'Horizontal Rule', click: () => sendAction('horizontal-rule') },
       ],
     },
     {
       label: 'View',
       submenu: [
+        { label: 'Toggle Raw Mode', accelerator: 'CmdOrCtrl+Shift+R', click: () => sendAction('toggle-raw') },
+        { type: 'separator' },
         { role: 'reload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },

@@ -1,8 +1,8 @@
 {
   "name": "markover",
-  "productName": "markover",
+  "productName": "Markover",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Markdown WYSIWYG editor with Word-like collaboration features",
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
