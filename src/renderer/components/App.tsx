@@ -17,7 +17,7 @@ import { RawEditor } from '../editor/RawEditor';
 import { KatexEditDialog } from '../ui/dialogs/KatexEditDialog';
 import { MermaidEditDialog } from '../ui/dialogs/MermaidEditDialog';
 import { ImageEditDialog } from '../ui/dialogs/ImageEditDialog';
-import { TableBubbleMenu } from '../ui/table/TableBubbleMenu';
+import { TableContextBar } from '../ui/table/TableContextBar';
 import { MessageSquare, GitCompare, X } from 'lucide-react';
 
 type SidebarTab = 'comments' | 'changes';
@@ -428,6 +428,7 @@ export function App() {
         }}
         onOpenUserSettings={() => setUserSettingsOpen(true)}
       />
+      {!isRawMode && editor && <TableContextBar editor={editor} />}
       <div className="flex flex-1 overflow-hidden">
         {isRawMode ? (
           <RawEditor
@@ -439,7 +440,6 @@ export function App() {
         <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
           <div className="max-w-4xl mx-auto">
             <EditorContent editor={editor} className="min-h-full" />
-            {editor && <TableBubbleMenu editor={editor} />}
           </div>
         </div>
         )}
@@ -507,7 +507,7 @@ export function App() {
       {userSettingsOpen && <UserSettingsDialog onClose={() => setUserSettingsOpen(false)} />}
 
       {/* KaTeX / Mermaid edit dialogs */}
-      {nodeEdit && nodeEdit.nodeType !== 'mermaidBlock' && (
+      {nodeEdit && (nodeEdit.nodeType === 'katexInline' || nodeEdit.nodeType === 'katexBlock') && (
         <KatexEditDialog
           math={nodeEdit.math}
           displayMode={nodeEdit.nodeType === 'katexBlock'}
