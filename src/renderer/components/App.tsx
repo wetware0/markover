@@ -15,6 +15,7 @@ import { CommentsPanel } from '../collaboration/comments/CommentsPanel';
 import { TrackChangesPanel } from '../collaboration/track-changes/TrackChangesPanel';
 import { RawEditor } from '../editor/RawEditor';
 import { HelpDialog } from '../ui/HelpDialog';
+import { AboutDialog } from '../ui/AboutDialog';
 import { KatexEditDialog } from '../ui/dialogs/KatexEditDialog';
 import { MermaidEditDialog } from '../ui/dialogs/MermaidEditDialog';
 import { ImageEditDialog } from '../ui/dialogs/ImageEditDialog';
@@ -39,6 +40,7 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userSettingsOpen, setUserSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('comments');
   const [pendingComment, setPendingComment] = useState<PendingComment | null>(null);
   const [commentText, setCommentText] = useState('');
@@ -489,6 +491,7 @@ export function App() {
         }
         case 'publish': handlePublish(); break;
         case 'help': setHelpOpen(true); break;
+        case 'about': setAboutOpen(true); break;
         default:
           if (action.startsWith('cspell-ignore:')) {
             const word = action.slice('cspell-ignore:'.length);
@@ -608,6 +611,9 @@ export function App() {
 
       {/* Help / user guide */}
       {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
+
+      {/* About dialog */}
+      {aboutOpen && <AboutDialog onClose={() => setAboutOpen(false)} />}
 
       {/* Unsaved changes confirmation */}
       {discardConfirm && (

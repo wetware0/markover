@@ -123,6 +123,8 @@ export function buildMenu(
       label: 'Help',
       submenu: [
         { label: 'User Guide', accelerator: 'F1', click: () => sendAction('help') },
+        { type: 'separator' },
+        { label: 'About Markover', click: () => sendAction('about') },
       ],
     },
   ];
