@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { resolveImageSrc } from '../../editor/extensions/image-editable';
 
 const WIDTH_PRESETS = [
   { label: 'Auto', value: '' },
@@ -30,7 +31,7 @@ export function ImageEditDialog({ src: initialSrc, alt: initialAlt, width: initi
 
         {src && (
           <div className="mb-4 flex justify-center bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 p-2" style={{ minHeight: '60px' }}>
-            <img src={src} alt={alt} style={{ maxHeight: '160px', maxWidth: '100%', objectFit: 'contain' }} />
+            <img src={resolveImageSrc(src)} alt={alt} style={{ maxHeight: '160px', maxWidth: '100%', objectFit: 'contain' }} />
           </div>
         )}
 

@@ -7,7 +7,7 @@ import Image from '@tiptap/extension-image';
  *   passed through the markover-asset: protocol so the main process can
  *   resolve them against the open file's directory and git root.
  */
-function resolveImageSrc(src: string): string {
+export function resolveImageSrc(src: string): string {
   if (!src) return src;
   if (/^(data:|https?:|file:)/i.test(src)) return src;
   return 'markover-asset://?src=' + encodeURIComponent(src);
