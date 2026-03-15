@@ -383,6 +383,32 @@ export function App() {
     return () => document.removeEventListener('markover:edit-node', handler);
   }, []);
 
+  // Handle link clicks inside the editor
+  const handleEditorClick = useCallback((e: React.MouseEvent) => {
+    const anchor = (e.target as HTMLElement).closest('a');
+    if (!anchor) return;
+    const href = anchor.getAttribute('href');
+    if (!href) return;
+    e.preventDefault();
+
+    const isMarkdownFile = /\.(md|markdown|mdown|mkd|mkdn)(\?.*)?$/i.test(href);
+    const isExternalUrl = /^https?:\/\//i.test(href);
+
+    if (isMarkdownFile && !isExternalUrl) {
+      // Resolve relative paths against the current file's directory
+      const currentPath = useEditorStore.getState().filePath;
+      let resolved = href;
+      if (currentPath && !/^[A-Za-z]:[/\\]/.test(href) && !href.startsWith('/')) {
+        const dir = currentPath.replace(/[/\\][^/\\]*$/, '');
+        // Normalise the joined path (handle ../ segments) via the URL API
+        resolved = new URL(href, `file:///${dir}/`).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+      }
+      void window.electronAPI.openFilePath(resolved);
+    } else {
+      void window.electronAPI.openPath(href);
+    }
+  }, []);
+
   const handleNodeEditSave = useCallback((newAttrs: Record<string, string>) => {
     if (!nodeEdit || !editor) return;
     const pos = nodeEdit.getPos();
@@ -511,7 +537,7 @@ export function App() {
             isDark={resolvedTheme === 'dark'}
           />
         ) : (
-        <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900">
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900" onClick={handleEditorClick}>
           <div className="max-w-4xl mx-auto">
             <EditorContent editor={editor} className="min-h-full" />
           </div>

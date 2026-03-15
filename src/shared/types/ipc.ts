@@ -25,6 +25,7 @@ export const IPC_CHANNELS = {
   CONFIRM_CLOSE: 'app:confirm-close',
   GET_OS_USERNAME: 'os:get-username',
   SHELL_OPEN_PATH: 'shell:open-path',
+  FILE_OPEN_PATH: 'file:open-path',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -44,6 +45,7 @@ export interface ElectronAPI {
   confirmClose: () => void;
   getOsUsername: () => Promise<string>;
   openPath: (path: string) => Promise<void>;
+  openFilePath: (filePath: string) => Promise<void>;
 }
 
 declare global {

@@ -121,6 +121,9 @@ const createWindow = async () => {
     },
   });
 
+  // Prevent renderer from spawning new browser windows (e.g. link clicks)
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
@@ -325,6 +328,10 @@ ipcMain.handle(IPC_CHANNELS.GET_OS_USERNAME, () => {
   } catch {
     return '';
   }
+});
+
+ipcMain.handle(IPC_CHANNELS.FILE_OPEN_PATH, (_event, filePath: string) => {
+  void openFileByPath(filePath);
 });
 
 ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, (_event, target: string) => {

@@ -28,6 +28,7 @@ const api: ElectronAPI = {
     ipcRenderer.invoke(IPC_CHANNELS.SPELLCHECK_ADD_WORD, word),
   getOsUsername: () => ipcRenderer.invoke(IPC_CHANNELS.GET_OS_USERNAME),
   openPath: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.SHELL_OPEN_PATH, filePath),
+  openFilePath: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.FILE_OPEN_PATH, filePath),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

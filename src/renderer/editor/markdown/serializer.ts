@@ -359,7 +359,7 @@ function getMarkWrapper(mark: Mark): { open: string; close: string } | null {
       return { open: '**', close: '**' };
     case 'italic':
     case 'em':
-      return { open: '*', close: '*' };
+      return { open: '_', close: '_' };
     case 'strike':
       return { open: '~~', close: '~~' };
     case 'code':
