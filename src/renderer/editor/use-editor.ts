@@ -1,4 +1,5 @@
 import { useEditor as useTipTapEditor } from '@tiptap/react';
+import { EditorState } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -125,6 +126,13 @@ export function useMarkoverEditor() {
 
       const html = markdownToHtml(cleanMarkdown);
       editor.commands.setContent(html);
+
+      // Clear undo/redo history so the file-load transaction cannot be Ctrl-Z'd.
+      // EditorState.create reinitialises all plugin states (history included)
+      // while keeping the current document and plugin configuration intact.
+      editor.view.updateState(
+        EditorState.create({ doc: editor.state.doc, plugins: editor.state.plugins }),
+      );
 
       if (tcStorage) tcStorage.enabled = tcWasEnabled;
       isLoadingRef.current = false;
