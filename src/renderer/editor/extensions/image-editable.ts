@@ -83,6 +83,7 @@ export const MarkoverImage = Image.extend({
               src: node.attrs.src,
               alt: node.attrs.alt || '',
               width: node.attrs.width || '',
+              href: node.attrs.href || '',
               getPos,
             },
           }),

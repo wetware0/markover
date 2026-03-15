@@ -27,6 +27,7 @@ const api: ElectronAPI = {
   spellcheckAddWord: (word: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.SPELLCHECK_ADD_WORD, word),
   getOsUsername: () => ipcRenderer.invoke(IPC_CHANNELS.GET_OS_USERNAME),
+  openPath: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.SHELL_OPEN_PATH, filePath),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

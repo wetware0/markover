@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, session, protocol, net } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, session, protocol, net, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -324,6 +324,14 @@ ipcMain.handle(IPC_CHANNELS.GET_OS_USERNAME, () => {
     return os.userInfo().username;
   } catch {
     return '';
+  }
+});
+
+ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, (_event, target: string) => {
+  if (/^https?:\/\//i.test(target)) {
+    void shell.openExternal(target);
+  } else {
+    void shell.openPath(target);
   }
 });
 

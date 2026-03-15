@@ -51,7 +51,7 @@ export function App() {
   type NodeEdit =
     | { nodeType: 'katexInline' | 'katexBlock'; math: string; getPos: () => number | undefined }
     | { nodeType: 'mermaidBlock'; code: string; getPos: () => number | undefined }
-    | { nodeType: 'image'; src: string; alt: string; width: string; getPos: () => number | undefined };
+    | { nodeType: 'image'; src: string; alt: string; width: string; href: string; getPos: () => number | undefined };
   const [nodeEdit, setNodeEdit] = useState<NodeEdit | null>(null);
 
   // F1 opens help
@@ -637,6 +637,7 @@ export function App() {
           src={nodeEdit.src}
           alt={nodeEdit.alt}
           width={nodeEdit.width}
+          href={nodeEdit.href}
           onSave={(attrs) => handleNodeEditSave(attrs)}
           onCancel={() => setNodeEdit(null)}
         />

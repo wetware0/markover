@@ -12,14 +12,22 @@ interface Props {
   src: string;
   alt: string;
   width: string;
-  onSave: (attrs: { src: string; alt: string; width: string }) => void;
+  href: string;
+  onSave: (attrs: { src: string; alt: string; width: string; href: string }) => void;
   onCancel: () => void;
 }
 
-export function ImageEditDialog({ src: initialSrc, alt: initialAlt, width: initialWidth, onSave, onCancel }: Props) {
+export function ImageEditDialog({ src: initialSrc, alt: initialAlt, width: initialWidth, href: initialHref, onSave, onCancel }: Props) {
   const [src, setSrc] = useState(initialSrc);
   const [alt, setAlt] = useState(initialAlt);
   const [width, setWidth] = useState(initialWidth);
+  const [href, setHref] = useState(initialHref);
+
+  function handleOpenLink() {
+    if (!href.trim()) return;
+    // Absolute file paths and URLs — let Electron/OS decide how to open them
+    void window.electronAPI.openPath(href.trim());
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -52,6 +60,27 @@ export function ImageEditDialog({ src: initialSrc, alt: initialAlt, width: initi
           placeholder="Describe the image…"
           className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
         />
+
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Link (href)</label>
+        <div className="flex gap-2 mb-3">
+          <input
+            type="text"
+            value={href}
+            onChange={(e) => setHref(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
+            placeholder="Path or URL the image links to…"
+            className="flex-1 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="button"
+            onClick={handleOpenLink}
+            disabled={!href.trim()}
+            title="Open linked file or URL"
+            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded hover:border-blue-400 hover:text-blue-600 disabled:opacity-40"
+          >
+            Open
+          </button>
+        </div>
 
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Width</label>
         <div className="flex gap-2 items-center flex-wrap">
@@ -88,7 +117,7 @@ export function ImageEditDialog({ src: initialSrc, alt: initialAlt, width: initi
           </button>
           <button
             type="button"
-            onClick={() => onSave({ src, alt, width })}
+            onClick={() => onSave({ src, alt, width, href })}
             disabled={!src.trim()}
             className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
           >
