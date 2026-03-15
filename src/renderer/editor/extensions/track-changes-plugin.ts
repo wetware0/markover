@@ -61,14 +61,21 @@ export const TrackChangesPlugin = Extension.create({
 
           let hasChanges = false;
           let insertionOffset = 0;
+          // When a step in this transaction skips a deletion of tracked text (e.g. the
+          // inversion of a markovDelete re-insertion during undo), any subsequent
+          // insertion in the same transaction is the undo restoring the original text —
+          // not a new user edit — and must not receive a markovInsert mark.
+          let skippedTrackedDeletion = false;
 
           userTx.steps.forEach((step) => {
             step.getMap().forEach((oldStart, oldEnd, newStart, newEnd) => {
               const adjNewStart = newStart + insertionOffset;
               const adjNewEnd = newEnd + insertionOffset;
 
-              // Text was inserted — group consecutive keystrokes into one change
-              if (newEnd > newStart) {
+              // Text was inserted — group consecutive keystrokes into one change.
+              // Skip if we already skipped a tracked deletion in this transaction:
+              // that means this insertion is the undo restoring the original text.
+              if (newEnd > newStart && !skippedTrackedDeletion) {
                 let changeId: string;
                 if (storage.currentInsertId && storage.lastInsertEnd === newStart) {
                   // Continuation of an existing insert run — reuse the same id
@@ -97,9 +104,10 @@ export const TrackChangesPlugin = Extension.create({
                   const deletedText = oldState.doc.textBetween(oldStart, oldEnd, '\n');
                   if (deletedText) {
                     // If the deleted range already contains tracked change marks, skip.
-                    // This handles undo of tracked insertions (Ctrl-Z re-deleting tracked
-                    // text should not create a spurious markovDelete mark) and also
-                    // cancels out deletion of already-tracked insertions.
+                    // This handles undo of tracked insertions/deletions — the Ctrl-Z
+                    // re-deleting tracked text must not create a spurious markovDelete.
+                    // Set skippedTrackedDeletion so any paired restoration insertion in
+                    // the same transaction is also skipped (undo of tracked deletion).
                     let hasTrackedMark = false;
                     oldState.doc.nodesBetween(oldStart, oldEnd, (node) => {
                       if (
@@ -113,7 +121,9 @@ export const TrackChangesPlugin = Extension.create({
                         return false;
                       }
                     });
-                    if (!hasTrackedMark) {
+                    if (hasTrackedMark) {
+                      skippedTrackedDeletion = true;
+                    } else {
                       const changeId = nanoid(8);
                       const deleteMark = newState.schema.marks.markovDelete.create({
                         changeId,
