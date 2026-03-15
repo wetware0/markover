@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, Menu, session, protocol, net, shel
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import os from 'node:os';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import started from 'electron-squirrel-startup';
 
@@ -331,7 +331,11 @@ ipcMain.handle(IPC_CHANNELS.GET_OS_USERNAME, () => {
 });
 
 ipcMain.handle(IPC_CHANNELS.FILE_OPEN_PATH, (_event, filePath: string) => {
-  void openFileByPath(filePath);
+  // Spawn a new independent app instance with the file as a CLI argument
+  const spawnArgs = app.isPackaged
+    ? [filePath]
+    : [app.getAppPath(), filePath];
+  spawn(process.execPath, spawnArgs, { detached: true, stdio: 'ignore' }).unref();
 });
 
 ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, (_event, target: string) => {
