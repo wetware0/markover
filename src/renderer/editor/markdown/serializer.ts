@@ -9,10 +9,20 @@ export function prosemirrorToMarkdown(doc: Node): string {
   return state.getOutput();
 }
 
+// --- Mark comparison ---
+
+function marksEqual(a: Mark, b: Mark): boolean {
+  if (a.type.name !== b.type.name) return false;
+  const aAttrs = a.attrs as Record<string, unknown>;
+  const bAttrs = b.attrs as Record<string, unknown>;
+  const keys = Object.keys(aAttrs);
+  if (keys.length !== Object.keys(bAttrs).length) return false;
+  return keys.every((k) => aAttrs[k] === bAttrs[k]);
+}
+
 class MarkdownSerializerState {
   private output = '';
   private closed = false;
-  private inTightList = false;
 
   getOutput(): string {
     return this.output.replace(/\n$/, '\n');
@@ -47,7 +57,6 @@ class MarkdownSerializerState {
     if (handler) {
       handler(this, node, parent, index);
     } else {
-      // Fallback: render as inline content
       this.renderInline(node);
     }
   }
@@ -67,66 +76,130 @@ class MarkdownSerializerState {
     }
   }
 
+  /**
+   * Render all inline children of a node using mark diffing.
+   *
+   * Instead of opening/closing marks per text run in isolation, we track which
+   * marks are currently "open" and only transition the delta between runs. This
+   * produces correct output for patterns like _italic **bold** italic_ where
+   * the outer italic mark stays open across the bold span.
+   */
   renderInlineContent(node: Node) {
-    node.forEach((child) => {
-      this.renderInline(child);
-    });
-  }
+    const openMarks: Mark[] = [];
 
-  private renderMarkedText(node: Node) {
-    const text = node.text || '';
-    const marks = node.marks || [];
-
-    let openMarks = '';
-    let closeMarks = '';
-
-    for (const mark of marks) {
-      const wrapper = getMarkWrapper(mark);
-      if (wrapper) {
-        openMarks += wrapper.open;
-        closeMarks = wrapper.close + closeMarks;
+    const transitionTo = (newMarks: readonly Mark[]) => {
+      // Find the shallowest open mark that is no longer needed
+      let closeFrom = openMarks.length;
+      for (let i = 0; i < openMarks.length; i++) {
+        if (!newMarks.some((n) => marksEqual(n, openMarks[i]))) {
+          closeFrom = i;
+          break;
+        }
       }
-    }
 
-    this.write(openMarks + escapeMarkdown(text, marks) + closeMarks);
+      // Close marks from innermost back to closeFrom; collect those to reopen
+      const toReopen: Mark[] = [];
+      for (let i = openMarks.length - 1; i >= closeFrom; i--) {
+        const wrapper = getMarkWrapper(openMarks[i]);
+        if (wrapper) this.write(wrapper.close);
+        if (newMarks.some((n) => marksEqual(n, openMarks[i]))) {
+          toReopen.unshift(openMarks[i]);
+        }
+      }
+      openMarks.splice(closeFrom);
+
+      // Re-establish marks that were closed but are still needed
+      for (const mark of toReopen) {
+        const wrapper = getMarkWrapper(mark);
+        if (wrapper) this.write(wrapper.open);
+        openMarks.push(mark);
+      }
+
+      // Open any newly required marks
+      for (const mark of newMarks) {
+        if (!openMarks.some((o) => marksEqual(o, mark))) {
+          const wrapper = getMarkWrapper(mark);
+          if (wrapper) this.write(wrapper.open);
+          openMarks.push(mark);
+        }
+      }
+    };
+
+    node.forEach((child) => {
+      if (child.isText) {
+        transitionTo(child.marks);
+        this.write(escapeMarkdown(child.text || '', child.marks));
+      } else {
+        // For inline leaf nodes (hardBreak, katexInline, etc.) close all marks first
+        transitionTo([]);
+        const handler = nodeHandlers[child.type.name];
+        if (child.isLeaf && handler) {
+          handler(this, child, node, 0);
+        } else {
+          child.forEach((grandchild) => this.renderInline(grandchild));
+        }
+      }
+    });
+
+    // Close any remaining open marks
+    transitionTo([]);
   }
 
   renderList(node: Node, prefix: (index: number) => string) {
-    const prevTight = this.inTightList;
-    this.inTightList = true;
-
-    node.forEach((child, _offset, index) => {
-      this.write(prefix(index));
-      this.renderListItem(child);
+    // A list is "loose" if any item has more than one child block
+    let isLoose = false;
+    node.forEach((item) => {
+      if (item.childCount > 1) isLoose = true;
     });
 
-    this.inTightList = prevTight;
+    node.forEach((child, _offset, index) => {
+      // Blank line between loose list items
+      if (index > 0 && isLoose && !this.output.endsWith('\n\n')) {
+        this.ensureNewLine();
+        this.write('\n');
+      }
+      this.write(prefix(index));
+      this.renderListItem(child, isLoose);
+    });
+
     if (!this.output.endsWith('\n\n')) {
       this.ensureNewLine();
       this.write('\n');
     }
   }
 
-  private renderListItem(node: Node) {
-    // Render paragraph content inline (no blank line between list items)
+  private renderListItem(node: Node, isLoose = false) {
     let first = true;
+
     node.forEach((child) => {
       if (child.type.name === 'paragraph') {
         if (!first) {
-          this.ensureNewLine();
+          // Blank line before non-first paragraphs in a loose item
+          if (isLoose && !this.output.endsWith('\n\n')) {
+            this.ensureNewLine();
+            this.write('\n');
+          }
           this.write('  '); // continuation indent
         }
         this.renderInlineContent(child);
         this.ensureNewLine();
-        first = false;
       } else {
-        // Nested lists, etc.
-        if (!first) {
-          this.write('  ');
+        // Block child (nested list, image, etc.) — render into sub-state
+        // and re-indent every line by two spaces, leaving blank lines blank
+        if (isLoose && !this.output.endsWith('\n\n')) {
+          this.ensureNewLine();
+          this.write('\n');
         }
-        this.renderNode(child, node, 0);
-        first = false;
+        const inner = new MarkdownSerializerState();
+        inner.renderNode(child, node, 0);
+        const raw = inner.getOutput().replace(/\n+$/, '');
+        for (const line of raw.split('\n')) {
+          // Non-empty lines get the continuation indent; blank lines stay blank
+          if (line.length > 0) this.write('  ' + line);
+          this.ensureNewLine();
+        }
       }
+      first = false;
     });
   }
 }
@@ -166,7 +239,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
     state.renderList(node, (i) => `${start + i}. `);
   },
 
-  listItem(state, _node) {
+  listItem(_state, _node) {
     // Handled by renderList
   },
 
@@ -187,7 +260,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
     state.closeBlock();
   },
 
-  taskItem(state, _node) {
+  taskItem(_state, _node) {
     // Handled by taskList
   },
 
@@ -209,7 +282,8 @@ const nodeHandlers: Record<string, NodeHandler> = {
     inner.renderContent(node);
     const lines = inner.getOutput().replace(/\n+$/, '').split('\n');
     for (const line of lines) {
-      state.write('> ' + line);
+      // Empty blockquote lines use '>' without a trailing space
+      state.write(line.length > 0 ? '> ' + line : '>');
       state.ensureNewLine();
     }
     state.closeBlock();

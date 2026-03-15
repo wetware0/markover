@@ -4,7 +4,7 @@ import footnotePlugin from 'markdown-it-footnote';
 
 const md = new MarkdownIt({
   html: true,
-  linkify: true,
+  linkify: false,
   typographer: false,
   breaks: false,
 })

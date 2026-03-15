@@ -12,6 +12,8 @@ import {
   Heading4,
   Heading5,
   Heading6,
+  IndentIncrease,
+  IndentDecrease,
   List,
   ListOrdered,
   ListTodo,
@@ -167,6 +169,26 @@ export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onTo
         </ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().toggleTaskList().run()} isActive={editor.isActive('taskList')} title="Task List">
           <ListTodo size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => {
+            if (editor.can().sinkListItem('listItem')) editor.chain().focus().sinkListItem('listItem').run();
+            else if (editor.can().sinkListItem('taskItem')) editor.chain().focus().sinkListItem('taskItem').run();
+          }}
+          disabled={!editor.can().sinkListItem('listItem') && !editor.can().sinkListItem('taskItem')}
+          title="Indent list item (Tab)"
+        >
+          <IndentIncrease size={iconSize} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => {
+            if (editor.can().liftListItem('listItem')) editor.chain().focus().liftListItem('listItem').run();
+            else if (editor.can().liftListItem('taskItem')) editor.chain().focus().liftListItem('taskItem').run();
+          }}
+          disabled={!editor.can().liftListItem('listItem') && !editor.can().liftListItem('taskItem')}
+          title="Outdent list item (Shift+Tab)"
+        >
+          <IndentDecrease size={iconSize} />
         </ToolbarButton>
 
         <ToolbarDivider />
