@@ -96,16 +96,35 @@ export const TrackChangesPlugin = Extension.create({
                 try {
                   const deletedText = oldState.doc.textBetween(oldStart, oldEnd, '\n');
                   if (deletedText) {
-                    const changeId = nanoid(8);
-                    const deleteMark = newState.schema.marks.markovDelete.create({
-                      changeId,
-                      author,
-                      date,
+                    // If the deleted range already contains tracked change marks, skip.
+                    // This handles undo of tracked insertions (Ctrl-Z re-deleting tracked
+                    // text should not create a spurious markovDelete mark) and also
+                    // cancels out deletion of already-tracked insertions.
+                    let hasTrackedMark = false;
+                    oldState.doc.nodesBetween(oldStart, oldEnd, (node) => {
+                      if (
+                        node.isText &&
+                        node.marks.some(
+                          (m) =>
+                            m.type.name === 'markovInsert' || m.type.name === 'markovDelete',
+                        )
+                      ) {
+                        hasTrackedMark = true;
+                        return false;
+                      }
                     });
-                    const textNode = newState.schema.text(deletedText, [deleteMark]);
-                    tr.insert(adjNewEnd, textNode);
-                    insertionOffset += deletedText.length;
-                    hasChanges = true;
+                    if (!hasTrackedMark) {
+                      const changeId = nanoid(8);
+                      const deleteMark = newState.schema.marks.markovDelete.create({
+                        changeId,
+                        author,
+                        date,
+                      });
+                      const textNode = newState.schema.text(deletedText, [deleteMark]);
+                      tr.insert(adjNewEnd, textNode);
+                      insertionOffset += deletedText.length;
+                      hasChanges = true;
+                    }
                   }
                 } catch {
                   // Skip structural changes (e.g. node splits)

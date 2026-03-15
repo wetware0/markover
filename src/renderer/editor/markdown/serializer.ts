@@ -146,10 +146,15 @@ class MarkdownSerializerState {
   }
 
   renderList(node: Node, prefix: (index: number) => string) {
-    // A list is "loose" if any item has more than one child block
+    // A list is "loose" if any item has more than one meaningful child block.
+    // Empty paragraphs (artifacts from block node extraction) are excluded.
     let isLoose = false;
     node.forEach((item) => {
-      if (item.childCount > 1) isLoose = true;
+      let meaningful = 0;
+      item.forEach((child) => {
+        if (!(child.type.name === 'paragraph' && child.childCount === 0)) meaningful++;
+      });
+      if (meaningful > 1) isLoose = true;
     });
 
     node.forEach((child, _offset, index) => {
@@ -172,6 +177,10 @@ class MarkdownSerializerState {
     let first = true;
 
     node.forEach((child) => {
+      // Skip empty paragraphs — these are artifacts left when ProseMirror extracts
+      // block-level nodes (e.g. images) out of their <p> wrapper during parsing.
+      if (child.type.name === 'paragraph' && child.childCount === 0) return;
+
       if (child.type.name === 'paragraph') {
         if (!first) {
           // Blank line before non-first paragraphs in a loose item
