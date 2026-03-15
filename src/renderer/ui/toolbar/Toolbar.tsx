@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Editor } from '@tiptap/core';
 import {
   Bold,
@@ -9,6 +9,9 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Heading4,
+  Heading5,
+  Heading6,
   List,
   ListOrdered,
   ListTodo,
@@ -77,6 +80,26 @@ export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onTo
   const [imageInsertDialog, setImageInsertDialog] = useState(false);
   const linkInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Show H1-H3 always; reveal H(N+1) when level N is used in the document
+  const [maxVisibleLevel, setMaxVisibleLevel] = useState(3);
+  useEffect(() => {
+    if (!editor) return;
+    const compute = () => {
+      let maxInDoc = 0;
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'heading') {
+          maxInDoc = Math.max(maxInDoc, node.attrs.level as number);
+        }
+      });
+      setMaxVisibleLevel(Math.min(6, Math.max(3, maxInDoc + 1)));
+    };
+    compute();
+    editor.on('update', compute);
+    return () => { editor.off('update', compute); };
+  }, [editor]);
+
+  const HeadingIcons = [Heading1, Heading2, Heading3, Heading4, Heading5, Heading6];
   if (!editor && !isRawMode) return null;
 
   const iconSize = 18;
@@ -96,16 +119,20 @@ export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onTo
 
         <ToolbarDivider />
 
-        {/* Headings */}
-        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} isActive={editor.isActive('heading', { level: 1 })} title="Heading 1">
-          <Heading1 size={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} isActive={editor.isActive('heading', { level: 2 })} title="Heading 2">
-          <Heading2 size={iconSize} />
-        </ToolbarButton>
-        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} isActive={editor.isActive('heading', { level: 3 })} title="Heading 3">
-          <Heading3 size={iconSize} />
-        </ToolbarButton>
+        {/* Headings — always H1-H3, plus one beyond the deepest used (up to H6) */}
+        {Array.from({ length: maxVisibleLevel }, (_, i) => i + 1).map((level) => {
+          const Icon = HeadingIcons[level - 1];
+          return (
+            <ToolbarButton
+              key={level}
+              onClick={() => editor.chain().focus().toggleHeading({ level: level as 1|2|3|4|5|6 }).run()}
+              isActive={editor.isActive('heading', { level })}
+              title={`Heading ${level}`}
+            >
+              <Icon size={iconSize} />
+            </ToolbarButton>
+          );
+        })}
 
         <ToolbarDivider />
 
