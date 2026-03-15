@@ -28,7 +28,36 @@ export const MarkoverImage = Image.extend({
         parseHTML: (el) => (el as HTMLElement).getAttribute('width') || null,
         renderHTML: (attrs) => (attrs.width ? { width: attrs.width as string } : {}),
       },
+      // Stores the href when an image is wrapped in a link: [![alt](src)](href)
+      href: {
+        default: null,
+        parseHTML: (el) => (el as HTMLElement).getAttribute('href') || null,
+        renderHTML: () => ({}), // href is not a valid <img> attribute
+      },
     };
+  },
+
+  parseHTML() {
+    return [
+      {
+        // <a href="..."><img src="..." /></a> — image wrapped in a link
+        tag: 'a',
+        getAttrs: (node) => {
+          const el = node as HTMLElement;
+          const img = el.querySelector('img');
+          if (!img) return false; // only match <a> elements that contain an <img>
+          return {
+            src: img.getAttribute('src') || '',
+            alt: img.getAttribute('alt') || '',
+            title: img.getAttribute('title') || null,
+            href: el.getAttribute('href') || null,
+            width: img.getAttribute('width') || null,
+          };
+        },
+        priority: 60, // higher than the default img rule (50) so this fires first
+      },
+      ...(this.parent?.() ?? []),
+    ];
   },
 
   addNodeView() {

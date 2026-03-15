@@ -229,12 +229,27 @@ const nodeHandlers: Record<string, NodeHandler> = {
     const src = node.attrs.src as string;
     const title = node.attrs.title as string;
     const width = node.attrs.width as string | null;
+    const href = node.attrs.href as string | null;
+
     // Emit HTML img tag when a custom width is set so it round-trips cleanly
+    let imageStr: string;
     if (width) {
       const titleAttr = title ? ` title="${title}"` : '';
-      state.write(`<img src="${src}" alt="${alt}"${titleAttr} width="${width}">`);
+      imageStr = `<img src="${src}" alt="${alt}"${titleAttr} width="${width}">`;
     } else {
-      state.write(`![${alt}](${src}${title ? ` "${title}"` : ''})`);
+      imageStr = `![${alt}](${src}${title ? ` "${title}"` : ''})`;
+    }
+
+    // Wrap in link syntax when the image was originally [![alt](src)](href)
+    if (href) {
+      state.write(`[${imageStr}](${href})`);
+    } else {
+      state.write(imageStr);
+    }
+
+    // Block-level images need a blank line after them (inline images do not)
+    if (node.isBlock) {
+      state.closeBlock();
     }
   },
 
