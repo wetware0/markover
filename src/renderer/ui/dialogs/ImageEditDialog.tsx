@@ -23,12 +23,6 @@ export function ImageEditDialog({ src: initialSrc, alt: initialAlt, width: initi
   const [width, setWidth] = useState(initialWidth);
   const [href, setHref] = useState(initialHref);
 
-  function handleOpenLink() {
-    if (!href.trim()) return;
-    // Absolute file paths and URLs — let Electron/OS decide how to open them
-    void window.electronAPI.openPath(href.trim());
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-5 w-[480px] border border-gray-200 dark:border-gray-700">
@@ -41,15 +35,26 @@ export function ImageEditDialog({ src: initialSrc, alt: initialAlt, width: initi
         )}
 
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Image URL</label>
-        <input
-          autoFocus
-          type="text"
-          value={src}
-          onChange={(e) => setSrc(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
-          placeholder="https://…"
-          className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
-        />
+        <div className="flex gap-2 mb-3">
+          <input
+            autoFocus
+            type="text"
+            value={src}
+            onChange={(e) => setSrc(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
+            placeholder="https://…"
+            className="flex-1 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="button"
+            onClick={() => { if (src.trim()) void window.electronAPI.openPath(src.trim()); }}
+            disabled={!src.trim()}
+            title="Open image file"
+            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded hover:border-blue-400 hover:text-blue-600 disabled:opacity-40"
+          >
+            Open
+          </button>
+        </div>
 
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Alt Text</label>
         <input
@@ -73,7 +78,7 @@ export function ImageEditDialog({ src: initialSrc, alt: initialAlt, width: initi
           />
           <button
             type="button"
-            onClick={handleOpenLink}
+            onClick={() => { if (href.trim()) void window.electronAPI.openPath(href.trim()); }}
             disabled={!href.trim()}
             title="Open linked file or URL"
             className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded hover:border-blue-400 hover:text-blue-600 disabled:opacity-40"

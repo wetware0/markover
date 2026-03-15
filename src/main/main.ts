@@ -330,9 +330,23 @@ ipcMain.handle(IPC_CHANNELS.GET_OS_USERNAME, () => {
 ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, (_event, target: string) => {
   if (/^https?:\/\//i.test(target)) {
     void shell.openExternal(target);
-  } else {
-    void shell.openPath(target);
+    return;
   }
+
+  let absolutePath: string;
+  if (/^[A-Za-z]:[/\\]/.test(target)) {
+    // Windows absolute path
+    absolutePath = target;
+  } else if (target.startsWith('/')) {
+    // Root-relative — not meaningful without git root; use as-is on Unix, give up on Windows
+    absolutePath = target;
+  } else {
+    // Relative path — resolve against the open file's directory
+    if (!currentFilePath) return;
+    absolutePath = path.join(path.dirname(currentFilePath), target);
+  }
+
+  void shell.openPath(absolutePath);
 });
 
 app.on('ready', () => {
