@@ -44,17 +44,33 @@ const MAX_RECENT = 10;
 
 // --- Recent files ---
 
+function isSamePath(a: string, b: string): boolean {
+  return process.platform === 'win32'
+    ? a.toLowerCase() === b.toLowerCase()
+    : a === b;
+}
+
+function dedupeRecent(files: string[]): string[] {
+  const seen = new Set<string>();
+  return files.filter((p) => {
+    const key = process.platform === 'win32' ? p.toLowerCase() : p;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function loadRecentFiles(): Promise<void> {
   try {
     const data = await fs.readFile(RECENT_PATH, 'utf-8');
-    recentFiles = JSON.parse(data) as string[];
+    recentFiles = dedupeRecent(JSON.parse(data) as string[]);
   } catch {
     recentFiles = [];
   }
 }
 
 async function addRecentFile(filePath: string): Promise<void> {
-  recentFiles = [filePath, ...recentFiles.filter((p) => p !== filePath)].slice(0, MAX_RECENT);
+  recentFiles = dedupeRecent([filePath, ...recentFiles.filter((p) => !isSamePath(p, filePath))]).slice(0, MAX_RECENT);
   await fs.writeFile(RECENT_PATH, JSON.stringify(recentFiles), 'utf-8').catch((_err) => { /* ignore write errors */ });
   rebuildMenu();
 }
