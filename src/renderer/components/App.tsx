@@ -424,19 +424,22 @@ export function App() {
     }
   }, []);
 
-  // Handle file opened from main process (File > Open menu)
+  // Handle file opened from main process (recent files, CLI arg, drag-drop)
   useEffect(() => {
     const unsubscribe = window.electronAPI.onFileChanged((data) => {
-      setRawMode(false);
-      rawContentRef.current = '';
-      loadContent(data.content);
-      setFile(data.filePath, data.fileName);
-      const meta = getMetadata();
-      setComments(meta.comments);
-      applyCspellIgnores(meta);
+      const doLoad = () => {
+        setRawMode(false);
+        rawContentRef.current = '';
+        loadContent(data.content);
+        setFile(data.filePath, data.fileName);
+        const meta = getMetadata();
+        setComments(meta.comments);
+        applyCspellIgnores(meta);
+      };
+      guardDirty(`You have unsaved changes. Open "${data.fileName}" anyway?`, doLoad);
     });
     return unsubscribe;
-  }, [loadContent, setFile, getMetadata, setComments, setRawMode, applyCspellIgnores]);
+  }, [loadContent, setFile, getMetadata, setComments, setRawMode, applyCspellIgnores, guardDirty]);
 
   // Handle menu actions
   useEffect(() => {
