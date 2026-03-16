@@ -78,9 +78,10 @@ function ToolbarDivider() {
 export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onToggleSidebar, trackChangesEnabled, onToggleTrackChanges, onOpenUserSettings }: ToolbarProps) {
   const { mode, cycle } = useThemeStore();
   const { name, color } = useUserStore();
-  const [linkDialog, setLinkDialog] = useState<{ href: string } | null>(null);
+  const [linkDialog, setLinkDialog] = useState<{ href: string; text: string } | null>(null);
   const [imageInsertDialog, setImageInsertDialog] = useState(false);
   const linkInputRef = useRef<HTMLInputElement>(null);
+  const linkTextRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Show H1-H3 always; reveal H(N+1) when level N is used in the document
@@ -208,7 +209,16 @@ export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onTo
 
         {/* Insert */}
         <ToolbarButton
-          onClick={() => setLinkDialog({ href: editor.getAttributes('link').href as string || '' })}
+          onClick={() => {
+            // Extend selection to full link if cursor is collapsed inside a link
+            if (editor.isActive('link') && editor.state.selection.empty) {
+              editor.chain().extendMarkRange('link').run();
+            }
+            const { from, to } = editor.state.selection;
+            const text = editor.state.doc.textBetween(from, to);
+            const href = editor.getAttributes('link').href as string || '';
+            setLinkDialog({ href, text });
+          }}
           isActive={editor.isActive('link')}
           title="Insert / Edit Link"
         >
@@ -286,49 +296,75 @@ export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onTo
       {linkDialog !== null && editor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-5 w-96 border border-gray-200 dark:border-gray-700">
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-3">Insert Link</h3>
-            <input
-              ref={linkInputRef}
-              autoFocus
-              type="text"
-              defaultValue={linkDialog.href}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const href = linkInputRef.current?.value.trim();
-                  if (href) editor.chain().focus().setLink({ href }).run();
-                  else editor.chain().focus().unsetLink().run();
-                  setLinkDialog(null);
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-3">
+              {linkDialog.href ? 'Edit Link' : 'Insert Link'}
+            </h3>
+            {(() => {
+              const applyLink = () => {
+                const href = linkInputRef.current?.value.trim() ?? '';
+                const newText = linkTextRef.current?.value.trim() ?? '';
+                if (!href) {
+                  editor.chain().focus().unsetLink().run();
+                } else if (newText && newText !== linkDialog.text) {
+                  editor.chain().focus().command(({ tr, state }) => {
+                    const { from, to } = state.selection;
+                    tr.replaceWith(from, to, state.schema.text(newText, [state.schema.marks.link.create({ href })]));
+                    return true;
+                  }).run();
+                } else {
+                  editor.chain().focus().setLink({ href }).run();
                 }
+                setLinkDialog(null);
+              };
+              const handleKeyDown = (e: React.KeyboardEvent) => {
+                if (e.key === 'Enter') applyLink();
                 if (e.key === 'Escape') { editor.chain().focus().run(); setLinkDialog(null); }
-              }}
-              placeholder="https://…"
-              className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
-            />
-            <div className="flex justify-between">
-              {linkDialog.href && (
-                <button
-                  type="button"
-                  onClick={() => { editor.chain().focus().unsetLink().run(); setLinkDialog(null); }}
-                  className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded"
-                >
-                  Remove Link
-                </button>
-              )}
-              <div className="flex gap-2 ml-auto">
-                <button type="button" onClick={() => setLinkDialog(null)} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">Cancel</button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const href = linkInputRef.current?.value.trim();
-                    if (href) editor.chain().focus().setLink({ href }).run();
-                    setLinkDialog(null);
-                  }}
-                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Apply
-                </button>
-              </div>
-            </div>
+              };
+              return (
+                <>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Text</label>
+                  <input
+                    ref={linkTextRef}
+                    type="text"
+                    defaultValue={linkDialog.text}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Link text"
+                    className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                  />
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">URL</label>
+                  <input
+                    ref={linkInputRef}
+                    autoFocus
+                    type="text"
+                    defaultValue={linkDialog.href}
+                    onKeyDown={handleKeyDown}
+                    placeholder="https://…"
+                    className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                  />
+                  <div className="flex justify-between">
+                    {linkDialog.href && (
+                      <button
+                        type="button"
+                        onClick={() => { editor.chain().focus().unsetLink().run(); setLinkDialog(null); }}
+                        className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded"
+                      >
+                        Remove Link
+                      </button>
+                    )}
+                    <div className="flex gap-2 ml-auto">
+                      <button type="button" onClick={() => setLinkDialog(null)} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">Cancel</button>
+                      <button
+                        type="button"
+                        onClick={applyLink}
+                        className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
