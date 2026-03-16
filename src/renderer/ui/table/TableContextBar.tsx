@@ -12,6 +12,9 @@ import {
   ArrowDown,
   Trash2,
   TableProperties,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from 'lucide-react';
 
 interface Props {
@@ -23,11 +26,13 @@ function Btn({
   title,
   children,
   danger,
+  active,
 }: {
   onClick: () => void;
   title: string;
   children: React.ReactNode;
   danger?: boolean;
+  active?: boolean;
 }) {
   return (
     <button
@@ -37,12 +42,39 @@ function Btn({
       className={`p-1 rounded transition-colors ${
         danger
           ? 'text-red-500 hover:bg-red-100 dark:hover:bg-red-950'
+          : active
+          ? 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900'
           : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
       }`}
     >
       {children}
     </button>
   );
+}
+
+/** Set the align attribute on every cell in the current column. */
+function setColumnAlign(editor: Editor, align: string | null) {
+  try {
+    const rect = selectedRect(editor.state);
+    const { map, tableStart, table } = rect;
+    const col = rect.left;
+    const tr = editor.state.tr;
+    for (let row = 0; row < map.height; row++) {
+      const cellOffset = map.map[row * map.width + col];
+      const cellNode = table.nodeAt(cellOffset);
+      if (!cellNode) continue;
+      tr.setNodeMarkup(tableStart + cellOffset, undefined, { ...cellNode.attrs, align });
+    }
+    editor.view.dispatch(tr);
+  } catch { /* not in table */ }
+}
+
+/** Return the align value of the cell the cursor is in. */
+function currentColAlign(editor: Editor): string | null {
+  try {
+    const a = (editor.getAttributes('tableCell').align || editor.getAttributes('tableHeader').align) as string | undefined;
+    return a || null;
+  } catch { return null; }
 }
 
 function Sep() {
@@ -73,6 +105,7 @@ export function TableContextBar({ editor }: Props) {
   if (!editor.isActive('table')) return null;
 
   const sz = 14;
+  const align = currentColAlign(editor);
 
   return (
     <div className="flex items-center gap-0 px-3 py-0.5 border-b border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 flex-shrink-0 overflow-x-auto">
@@ -99,6 +132,19 @@ export function TableContextBar({ editor }: Props) {
       </Btn>
       <Btn onClick={() => editor.chain().focus().deleteColumn().run()} title="Delete column" danger>
         <span className="flex items-center gap-0.5 text-xs"><Trash2 size={sz} />Col</span>
+      </Btn>
+
+      <Sep />
+
+      {/* Column alignment */}
+      <Btn onClick={() => setColumnAlign(editor, align === 'left' ? null : 'left')} title="Align column left" active={align === 'left'}>
+        <AlignLeft size={sz} />
+      </Btn>
+      <Btn onClick={() => setColumnAlign(editor, align === 'center' ? null : 'center')} title="Align column centre" active={align === 'center'}>
+        <AlignCenter size={sz} />
+      </Btn>
+      <Btn onClick={() => setColumnAlign(editor, align === 'right' ? null : 'right')} title="Align column right" active={align === 'right'}>
+        <AlignRight size={sz} />
       </Btn>
 
       <Sep />
