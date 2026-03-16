@@ -13,6 +13,34 @@ import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
+
+// Extend TableCell/TableHeader to preserve column alignment (left/center/right)
+// parsed from markdown-it's style="text-align:..." attributes.
+const AlignedTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      align: {
+        default: null,
+        parseHTML: (el) => (el as HTMLElement).style.textAlign || null,
+        renderHTML: (attrs) => (attrs.align ? { style: `text-align: ${attrs.align as string}` } : {}),
+      },
+    };
+  },
+});
+
+const AlignedTableHeader = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      align: {
+        default: null,
+        parseHTML: (el) => (el as HTMLElement).style.textAlign || null,
+        renderHTML: (attrs) => (attrs.align ? { style: `text-align: ${attrs.align as string}` } : {}),
+      },
+    };
+  },
+});
 import { useEditorStore } from '../store/editor-store';
 import { useCallback, useRef } from 'react';
 import type { Editor } from '@tiptap/core';
@@ -80,8 +108,8 @@ export function useMarkoverEditor() {
       Highlight.configure({ multicolor: true }),
       Table.configure({ resizable: true }),
       TableRow,
-      TableCell,
-      TableHeader,
+      AlignedTableCell,
+      AlignedTableHeader,
       KatexInline,
       KatexBlock,
       MermaidBlock,

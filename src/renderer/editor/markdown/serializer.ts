@@ -359,11 +359,15 @@ const nodeHandlers: Record<string, NodeHandler> = {
     state.write(' |');
     state.ensureNewLine();
 
-    // Separator row
+    // Separator row — emit alignment markers based on cell align attribute
     state.write('| ');
-    headerRow.forEach((_cell, _offset, i) => {
+    headerRow.forEach((cell, _offset, i) => {
       if (i > 0) state.write(' | ');
-      state.write('---');
+      const align = cell.attrs.align as string | null;
+      if (align === 'center') state.write(':---:');
+      else if (align === 'right') state.write('---:');
+      else if (align === 'left') state.write(':---');
+      else state.write('---');
     });
     state.write(' |');
     state.ensureNewLine();

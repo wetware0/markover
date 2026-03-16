@@ -11,6 +11,22 @@ const md = new MarkdownIt({
   .use(taskLists, { enabled: true, label: true, labelAfter: true })
   .use(footnotePlugin);
 
+// Inside blockquotes, convert soft line breaks to hard breaks so that
+// consecutive "> line1\n> line2" lines preserve their visual separation
+// instead of being silently merged into one paragraph.
+md.core.ruler.push('blockquote_hard_breaks', (state) => {
+  let depth = 0;
+  for (const token of state.tokens) {
+    if (token.type === 'blockquote_open') depth++;
+    if (token.type === 'blockquote_close') depth--;
+    if (depth > 0 && token.type === 'inline' && token.children) {
+      for (const child of token.children) {
+        if (child.type === 'softbreak') child.type = 'hardbreak';
+      }
+    }
+  }
+});
+
 // Custom rule: inline math $...$
 md.inline.ruler.after('escape', 'katex_inline', (state, silent) => {
   if (state.src[state.pos] !== '$' || state.src[state.pos + 1] === '$') return false;
