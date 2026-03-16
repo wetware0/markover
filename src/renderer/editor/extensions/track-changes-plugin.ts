@@ -101,38 +101,56 @@ export const TrackChangesPlugin = Extension.create({
                 storage.currentInsertId = null;
                 storage.lastInsertEnd = null;
                 try {
-                  const deletedText = oldState.doc.textBetween(oldStart, oldEnd, '\n');
-                  if (deletedText) {
-                    // If the deleted range already contains tracked change marks, skip.
-                    // This handles undo of tracked insertions/deletions — the Ctrl-Z
-                    // re-deleting tracked text must not create a spurious markovDelete.
-                    // Set skippedTrackedDeletion so any paired restoration insertion in
-                    // the same transaction is also skipped (undo of tracked deletion).
-                    let hasTrackedMark = false;
-                    oldState.doc.nodesBetween(oldStart, oldEnd, (node) => {
-                      if (
-                        node.isText &&
-                        node.marks.some(
-                          (m) =>
-                            m.type.name === 'markovInsert' || m.type.name === 'markovDelete',
-                        )
-                      ) {
-                        hasTrackedMark = true;
-                        return false;
-                      }
-                    });
-                    if (hasTrackedMark) {
-                      skippedTrackedDeletion = true;
+                  // Classify the deleted content: tracked nodes (markovInsert/Delete)
+                  // and untracked text. For undo safety, set skippedTrackedDeletion if
+                  // any tracked marks are present. For mixed ranges, still track the
+                  // untracked portions so they aren't silently lost.
+                  let hasTrackedNodes = false;
+                  let hasUntrackedNodes = false;
+                  oldState.doc.nodesBetween(oldStart, oldEnd, (node) => {
+                    if (!node.isText) return true;
+                    if (node.marks.some((m) => m.type.name === 'markovInsert' || m.type.name === 'markovDelete')) {
+                      hasTrackedNodes = true;
+                    } else if (node.text) {
+                      hasUntrackedNodes = true;
+                    }
+                  });
+
+                  if (hasTrackedNodes) {
+                    // Flag so any paired restoration insertion in this transaction
+                    // (i.e. undo of a tracked deletion) is not marked as a new edit.
+                    skippedTrackedDeletion = true;
+                  }
+
+                  if (hasUntrackedNodes) {
+                    let textToTrack: string;
+                    if (!hasTrackedNodes) {
+                      // Pure untracked deletion — use textBetween to get paragraph seps
+                      textToTrack = oldState.doc.textBetween(oldStart, oldEnd, '\n');
                     } else {
+                      // Mixed range — collect only the untracked text segments
+                      let untrackedText = '';
+                      oldState.doc.nodesBetween(oldStart, oldEnd, (node, pos) => {
+                        if (!node.isText || !node.text) return true;
+                        if (!node.marks.some((m) => m.type.name === 'markovInsert' || m.type.name === 'markovDelete')) {
+                          const s = Math.max(pos, oldStart);
+                          const e = Math.min(pos + node.nodeSize, oldEnd);
+                          untrackedText += node.text.slice(s - pos, e - pos);
+                        }
+                      });
+                      textToTrack = untrackedText;
+                    }
+
+                    if (textToTrack) {
                       const changeId = nanoid(8);
                       const deleteMark = newState.schema.marks.markovDelete.create({
                         changeId,
                         author,
                         date,
                       });
-                      const textNode = newState.schema.text(deletedText, [deleteMark]);
+                      const textNode = newState.schema.text(textToTrack, [deleteMark]);
                       tr.insert(adjNewEnd, textNode);
-                      insertionOffset += deletedText.length;
+                      insertionOffset += textToTrack.length;
                       hasChanges = true;
                     }
                   }

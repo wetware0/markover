@@ -3,6 +3,7 @@ import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
+import { PublisherGithub } from '@electron-forge/publisher-github';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
@@ -15,6 +16,13 @@ const config: ForgeConfig = {
     appVersion: '1.0.0',
     appCopyright: `Copyright © ${new Date().getFullYear()} Peter Williams`,
   },
+  publishers: [
+    new PublisherGithub({
+      repository: { owner: 'wetware0', name: 'markover' },
+      prerelease: false,
+      draft: true,
+    }),
+  ],
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({

@@ -5,6 +5,7 @@ import os from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import started from 'electron-squirrel-startup';
+import { updateElectronApp, UpdateSourceType } from 'update-electron-app';
 
 const execFileAsync = promisify(execFile);
 
@@ -33,6 +34,17 @@ protocol.registerSchemesAsPrivileged([
 
 if (started) {
   app.quit();
+}
+
+// Check for updates from GitHub Releases on startup (packaged builds only)
+if (app.isPackaged) {
+  updateElectronApp({
+    updateSource: {
+      type: UpdateSourceType.ElectronPublicUpdateService,
+      repo: 'wetware0/markover',
+    },
+    notifyUser: true,
+  });
 }
 
 let mainWindow: BrowserWindow | null = null;

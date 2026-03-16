@@ -118,8 +118,7 @@ Output is placed in `out/make/`.
 - **Track changes and structural edits** — Deleting across paragraph boundaries or through formatted node boundaries may not be tracked cleanly; the plugin skips structural changes to avoid corruption.
 - **Track changes and mixed ranges** — Deleting a range that spans both tracked and untracked text skips tracking the untracked portion.
 - **Blockquote line breaks** — Two consecutive `> ` lines without a blank line are rendered with a hard line break between them (rather than merged into one paragraph). This is intentional but deviates from strict CommonMark behaviour.
-- **Spell check in raw mode** — The CodeMirror raw editor does not use Electron's Hunspell spell checker.
-- **No auto-update** — New versions require a manual reinstall.
+- **Spell check in raw mode** — The CodeMirror raw editor uses the browser's built-in spell checker (red underlines) rather than Electron's Hunspell integration; context-menu suggestions are not available in raw mode.
 
 ---
 

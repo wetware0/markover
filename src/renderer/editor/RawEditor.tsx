@@ -3,6 +3,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { EditorView } from '@codemirror/view';
 
 interface RawEditorProps {
   value: string;
@@ -17,7 +18,10 @@ export function RawEditor({ value, onChange, isDark }: RawEditorProps) {
         value={value}
         height="100%"
         theme={isDark ? oneDark : 'light'}
-        extensions={[markdown({ codeLanguages: languages })]}
+        extensions={[
+          markdown({ codeLanguages: languages }),
+          EditorView.contentAttributes.of({ spellcheck: 'true' }),
+        ]}
         onChange={onChange}
         basicSetup={{
           lineNumbers: true,
