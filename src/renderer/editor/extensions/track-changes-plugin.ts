@@ -101,18 +101,14 @@ export const TrackChangesPlugin = Extension.create({
                 storage.currentInsertId = null;
                 storage.lastInsertEnd = null;
                 try {
-                  // Classify the deleted content: tracked nodes (markovInsert/Delete)
-                  // and untracked text. For undo safety, set skippedTrackedDeletion if
-                  // any tracked marks are present. For mixed ranges, still track the
-                  // untracked portions so they aren't silently lost.
+                  // Determine whether the deleted range contains tracked marks and/or
+                  // block-level nodes (tables, code blocks, etc.).
                   let hasTrackedNodes = false;
-                  let hasUntrackedNodes = false;
                   oldState.doc.nodesBetween(oldStart, oldEnd, (node) => {
                     if (!node.isText) return true;
                     if (node.marks.some((m) => m.type.name === 'markovInsert' || m.type.name === 'markovDelete')) {
                       hasTrackedNodes = true;
-                    } else if (node.text) {
-                      hasUntrackedNodes = true;
+                      return false;
                     }
                   });
 
@@ -120,38 +116,50 @@ export const TrackChangesPlugin = Extension.create({
                     // Flag so any paired restoration insertion in this transaction
                     // (i.e. undo of a tracked deletion) is not marked as a new edit.
                     skippedTrackedDeletion = true;
-                  }
 
-                  if (hasUntrackedNodes) {
-                    let textToTrack: string;
-                    if (!hasTrackedNodes) {
-                      // Pure untracked deletion — use textBetween to get paragraph seps
-                      textToTrack = oldState.doc.textBetween(oldStart, oldEnd, '\n');
-                    } else {
-                      // Mixed range — collect only the untracked text segments
-                      let untrackedText = '';
-                      oldState.doc.nodesBetween(oldStart, oldEnd, (node, pos) => {
-                        if (!node.isText || !node.text) return true;
-                        if (!node.marks.some((m) => m.type.name === 'markovInsert' || m.type.name === 'markovDelete')) {
-                          const s = Math.max(pos, oldStart);
-                          const e = Math.min(pos + node.nodeSize, oldEnd);
-                          untrackedText += node.text.slice(s - pos, e - pos);
-                        }
-                      });
-                      textToTrack = untrackedText;
-                    }
-
-                    if (textToTrack) {
+                    // Mixed range: still track the untracked text portions
+                    let untrackedText = '';
+                    oldState.doc.nodesBetween(oldStart, oldEnd, (node, pos) => {
+                      if (!node.isText || !node.text) return true;
+                      if (!node.marks.some((m) => m.type.name === 'markovInsert' || m.type.name === 'markovDelete')) {
+                        const s = Math.max(pos, oldStart);
+                        const e = Math.min(pos + node.nodeSize, oldEnd);
+                        untrackedText += node.text.slice(s - pos, e - pos);
+                      }
+                    });
+                    if (untrackedText) {
                       const changeId = nanoid(8);
-                      const deleteMark = newState.schema.marks.markovDelete.create({
-                        changeId,
-                        author,
-                        date,
-                      });
-                      const textNode = newState.schema.text(textToTrack, [deleteMark]);
-                      tr.insert(adjNewEnd, textNode);
-                      insertionOffset += textToTrack.length;
+                      const deleteMark = newState.schema.marks.markovDelete.create({ changeId, author, date });
+                      tr.insert(adjNewEnd, newState.schema.text(untrackedText, [deleteMark]));
+                      insertionOffset += untrackedText.length;
                       hasChanges = true;
+                    }
+                  } else {
+                    // Pure untracked deletion — check for block-level content
+                    const slice = oldState.doc.slice(oldStart, oldEnd);
+                    let hasBlocks = false;
+                    slice.content.forEach((node) => { if (node.isBlock) hasBlocks = true; });
+
+                    if (hasBlocks) {
+                      // Block-level deletion (table, code block, etc.): re-insert the
+                      // original nodes so the structure is preserved, then apply
+                      // markovDelete to all inline text within the re-inserted range.
+                      const changeId = nanoid(8);
+                      const deleteMark = newState.schema.marks.markovDelete.create({ changeId, author, date });
+                      tr.insert(adjNewEnd, slice.content);
+                      tr.addMark(adjNewEnd, adjNewEnd + slice.content.size, deleteMark);
+                      insertionOffset += slice.content.size;
+                      hasChanges = true;
+                    } else {
+                      // Pure inline text deletion
+                      const deletedText = oldState.doc.textBetween(oldStart, oldEnd, '\n');
+                      if (deletedText) {
+                        const changeId = nanoid(8);
+                        const deleteMark = newState.schema.marks.markovDelete.create({ changeId, author, date });
+                        tr.insert(adjNewEnd, newState.schema.text(deletedText, [deleteMark]));
+                        insertionOffset += deletedText.length;
+                        hasChanges = true;
+                      }
                     }
                   }
                 } catch {

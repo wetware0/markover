@@ -270,7 +270,7 @@ export function App() {
         // Accept insertion: remove the mark, keep the text
         editor.chain().focus().unsetMarkovInsert(changeId).run();
       } else {
-        // Accept deletion: remove the struck-through text entirely
+        // Accept deletion: remove the struck-through content entirely
         const { doc } = editor.state;
         const tr = editor.state.tr;
         tr.setMeta('trackChangesProcessed', true);
@@ -282,10 +282,26 @@ export function App() {
           );
           if (mark) positions.push({ from: pos, to: pos + node.nodeSize });
         });
-        for (let i = positions.length - 1; i >= 0; i--) {
-          tr.delete(positions[i].from, positions[i].to);
+        if (positions.length > 0) {
+          // If all marked text sits within the same non-paragraph top-level block
+          // (table, code block, etc.), delete that whole block node rather than
+          // just the text inside it — otherwise an empty shell would be left behind.
+          const BLOCK_TYPES = new Set(['table', 'codeBlock', 'blockquote', 'bulletList', 'orderedList', 'taskList']);
+          const topLevelNodes = positions.map((p) => doc.resolve(p.from).node(1));
+          const firstTopLevel = topLevelNodes[0];
+          const isSingleBlock = topLevelNodes.every((n) => n === firstTopLevel);
+          const isBlockDeletion = isSingleBlock && BLOCK_TYPES.has(firstTopLevel.type.name);
+
+          if (isBlockDeletion) {
+            const $pos = doc.resolve(positions[0].from);
+            tr.delete($pos.before(1), $pos.after(1));
+          } else {
+            for (let i = positions.length - 1; i >= 0; i--) {
+              tr.delete(positions[i].from, positions[i].to);
+            }
+          }
+          editor.view.dispatch(tr);
         }
-        if (positions.length > 0) editor.view.dispatch(tr);
       }
       removeChange(changeId);
     },
