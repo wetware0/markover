@@ -75,7 +75,7 @@ export function App() {
   // Warn before window close when dirty (main process shows native dialog)
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty) e.returnValue = ''; // Triggers will-prevent-unload in main process
+      if (isDirty) e.preventDefault(); // Triggers will-prevent-unload in main process
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);

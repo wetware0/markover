@@ -204,8 +204,9 @@ const createWindow = async () => {
   });
 
   // Guard: warn before close if renderer signals unsaved changes via beforeunload
-  mainWindow.webContents.on('will-prevent-unload', async (event) => {
-    event.preventDefault(); // Let us handle it
+  mainWindow.webContents.on('will-prevent-unload', async (_event) => {
+    // Do NOT call event.preventDefault() here — that would allow the close to proceed immediately.
+    // Leaving it uncalled keeps the window blocked while we show our own dialog.
     const { response } = await dialog.showMessageBox(mainWindow!, {
       type: 'question',
       buttons: ['Save & Close', 'Close Without Saving', 'Cancel'],
