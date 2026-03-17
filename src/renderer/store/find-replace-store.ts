@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 
+const FIND_HISTORY_KEY = 'markover-find-history';
+const REPLACE_HISTORY_KEY = 'markover-replace-history';
+
 export interface SearchOptions {
   matchCase: boolean;
   wholeWord: boolean;
@@ -20,7 +23,8 @@ const defaultOptions: SearchOptions = {
 
 function loadHistory(key: string): string[] {
   try {
-    return JSON.parse(localStorage.getItem(key) ?? '[]') as string[];
+    const parsed: unknown = JSON.parse(localStorage.getItem(key) ?? '[]');
+    return Array.isArray(parsed) ? (parsed as string[]) : [];
   } catch {
     return [];
   }
@@ -80,8 +84,8 @@ export const useFindReplaceStore = create<FindReplaceState>((set, get) => ({
   scopeLabel: null,
   regexError: null,
   statusMessage: null,
-  findHistory: loadHistory('markover-find-history'),
-  replaceHistory: loadHistory('markover-replace-history'),
+  findHistory: loadHistory(FIND_HISTORY_KEY),
+  replaceHistory: loadHistory(REPLACE_HISTORY_KEY),
 
   open: (tab = 'find', prefill) => {
     const update: Partial<FindReplaceState> = { isOpen: true, activeTab: tab };
@@ -93,7 +97,7 @@ export const useFindReplaceStore = create<FindReplaceState>((set, get) => ({
 
   setActiveTab: (activeTab) => set({ activeTab }),
 
-  setQuery: (query) => set({ query, statusMessage: null }),
+  setQuery: (query) => set({ query, statusMessage: null, regexError: null }),
 
   setReplacement: (replacement) => set({ replacement }),
 
@@ -108,17 +112,17 @@ export const useFindReplaceStore = create<FindReplaceState>((set, get) => ({
   setStatusMessage: (statusMessage) => set({ statusMessage }),
 
   clearMatchState: () =>
-    set({ matchCount: 0, currentMatchIndex: 0, scopeLabel: null, statusMessage: null }),
+    set({ matchCount: 0, currentMatchIndex: 0, scopeLabel: null, statusMessage: null, regexError: null }),
 
   pushFindHistory: (query) => {
     const next = addToHistory(get().findHistory, query);
-    saveHistory('markover-find-history', next);
+    saveHistory(FIND_HISTORY_KEY, next);
     set({ findHistory: next });
   },
 
   pushReplaceHistory: (replacement) => {
     const next = addToHistory(get().replaceHistory, replacement);
-    saveHistory('markover-replace-history', next);
+    saveHistory(REPLACE_HISTORY_KEY, next);
     set({ replaceHistory: next });
   },
 }));
