@@ -9,6 +9,7 @@ import { UserSettingsDialog } from '../ui/UserSettingsDialog';
 import { useCommentsStore } from '../collaboration/comments/comment-store';
 import { useTrackChangesStore } from '../collaboration/track-changes/track-changes-store';
 import { useThemeStore } from '../store/theme-store';
+import { useZoomStore } from '../store/zoom-store';
 import { Toolbar } from '../ui/toolbar/Toolbar';
 import { StatusBar } from '../ui/statusbar/StatusBar';
 import { CommentsPanel } from '../collaboration/comments/CommentsPanel';
@@ -40,6 +41,7 @@ export function App() {
   const { enabled: trackChangesEnabled, setEnabled: setTrackChangesEnabled, changes, setChanges, removeChange } = useTrackChangesStore();
   const { resolved: resolvedTheme } = useThemeStore();
   const { name: userName, setName } = useUserStore();
+  const { zoomLevel, zoomIn, zoomOut, resetZoom } = useZoomStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userSettingsOpen, setUserSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -433,6 +435,40 @@ export function App() {
     return () => document.removeEventListener('markover:edit-node', handler);
   }, []);
 
+  // Ctrl+Wheel zoom
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      if (e.deltaY < 0) zoomIn();
+      else zoomOut();
+    };
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, [zoomIn, zoomOut]);
+
+  // Ctrl++/−/0 zoom keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey) return;
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        e.stopPropagation();
+        zoomIn();
+      } else if (e.key === '-') {
+        e.preventDefault();
+        e.stopPropagation();
+        zoomOut();
+      } else if (e.key === '0') {
+        e.preventDefault();
+        e.stopPropagation();
+        resetZoom();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [zoomIn, zoomOut, resetZoom]);
+
   // Handle link clicks inside the editor
   const handleEditorClick = useCallback((e: React.MouseEvent) => {
     const anchor = (e.target as HTMLElement).closest('a');
@@ -617,15 +653,17 @@ export function App() {
       {!isRawMode && editor && <div className="print:hidden"><TableContextBar editor={editor} /></div>}
       <div className="flex flex-1 overflow-hidden print:block print:overflow-visible">
         {isRawMode ? (
-          <RawEditor
-            value={rawContentRef.current}
-            onChange={(v) => { rawContentRef.current = v; setDirty(true); }}
-            isDark={resolvedTheme === 'dark'}
-            searchRef={rawSearchRef}
-          />
+          <div className="flex flex-1 overflow-hidden" style={{ fontSize: `${zoomLevel}%` }}>
+            <RawEditor
+              value={rawContentRef.current}
+              onChange={(v) => { rawContentRef.current = v; setDirty(true); }}
+              isDark={resolvedTheme === 'dark'}
+              searchRef={rawSearchRef}
+            />
+          </div>
         ) : (
         <div className="flex-1 overflow-y-auto print:overflow-visible bg-white dark:bg-gray-900" onClick={handleEditorClick}>
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-4xl mx-auto" style={{ fontSize: `${zoomLevel}%` }}>
             <EditorContent editor={editor} className="min-h-full" />
           </div>
         </div>
