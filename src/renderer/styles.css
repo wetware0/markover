@@ -407,7 +407,7 @@
 
   .ProseMirror {
     padding: 0 !important;
-    font-size: 12pt;
+    font-size: 12pt !important;
     line-height: 1.5;
   }
 
