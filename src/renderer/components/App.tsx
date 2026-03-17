@@ -535,7 +535,7 @@ export function App() {
   }, [editor, isRawMode, handleNew, handleSave, handleSaveAs, handlePublish, handleToggleRawMode, handleAddComment, trackChangesEnabled, setTrackChangesEnabled]);
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div className="flex flex-col h-screen print:h-auto print:overflow-visible bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <Toolbar
         editor={editor}
         isRawMode={isRawMode}
@@ -551,7 +551,7 @@ export function App() {
         onOpenUserSettings={() => setUserSettingsOpen(true)}
       />
       {!isRawMode && editor && <div className="print:hidden"><TableContextBar editor={editor} /></div>}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden print:block print:overflow-visible">
         {isRawMode ? (
           <RawEditor
             value={rawContentRef.current}
@@ -559,7 +559,7 @@ export function App() {
             isDark={resolvedTheme === 'dark'}
           />
         ) : (
-        <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900" onClick={handleEditorClick}>
+        <div className="flex-1 overflow-y-auto print:overflow-visible bg-white dark:bg-gray-900" onClick={handleEditorClick}>
           <div className="max-w-4xl mx-auto">
             <EditorContent editor={editor} className="min-h-full" />
           </div>

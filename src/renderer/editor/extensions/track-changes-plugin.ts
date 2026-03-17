@@ -141,15 +141,78 @@ export const TrackChangesPlugin = Extension.create({
                     slice.content.forEach((node) => { if (node.isBlock) hasBlocks = true; });
 
                     if (hasBlocks) {
-                      // Block-level deletion (table, code block, etc.): re-insert the
-                      // original nodes so the structure is preserved, then apply
-                      // markovDelete to all inline text within the re-inserted range.
                       const changeId = nanoid(8);
                       const deleteMark = newState.schema.marks.markovDelete.create({ changeId, author, date });
-                      tr.insert(adjNewEnd, slice.content);
-                      tr.addMark(adjNewEnd, adjNewEnd + slice.content.size, deleteMark);
-                      insertionOffset += slice.content.size;
-                      hasChanges = true;
+
+                      if (slice.openStart === 0 && slice.openEnd === 0) {
+                        // Clean block deletion (selection at exact block boundaries):
+                        // re-insert original nodes and mark all inline text within.
+                        tr.insert(adjNewEnd, slice.content);
+                        tr.addMark(adjNewEnd, adjNewEnd + slice.content.size, deleteMark);
+                        insertionOffset += slice.content.size;
+                        hasChanges = true;
+                      } else {
+                        // Selection crossed a paragraph boundary (openStart/openEnd > 0).
+                        // Inserting slice.content at a mid-paragraph position is invalid.
+                        // Split into three parts:
+                        //   1. Inline ghost text for the partial first paragraph
+                        //   2. Complete block nodes (table, code block, etc.) re-inserted
+                        //      just after the merged paragraph
+                        //   3. Ghost paragraph for the partial last paragraph
+                        const $fromOld = oldState.doc.resolve(oldStart);
+                        const $toOld = oldState.doc.resolve(oldEnd);
+
+                        // 1. Inline text from partial first paragraph (selection start → para end)
+                        const firstInlineText = slice.openStart > 0 && $fromOld.depth >= 1
+                          ? oldState.doc.textBetween(oldStart, Math.min($fromOld.end(1), oldEnd), '\n')
+                          : '';
+
+                        // Range of complete blocks between the partial first/last paragraphs
+                        const blocksStart = slice.openStart > 0 && $fromOld.depth >= 1
+                          ? $fromOld.after(1) : oldStart;
+                        const blocksEnd = slice.openEnd > 0 && $toOld.depth >= 1
+                          ? $toOld.before(1) : oldEnd;
+
+                        // 1. Insert inline ghost text for the partial first paragraph
+                        if (firstInlineText) {
+                          tr.insert(adjNewEnd, newState.schema.text(firstInlineText, [deleteMark]));
+                          insertionOffset += firstInlineText.length;
+                          hasChanges = true;
+                        }
+
+                        // Insertion point for block-level ghost content:
+                        // - openStart > 0: we are inside a merged paragraph → go after it
+                        // - openStart = 0: newEnd is already at a block boundary
+                        const insertBlocksAt = slice.openStart > 0
+                          ? newState.doc.resolve(newEnd).after(1) + insertionOffset
+                          : newEnd + insertionOffset;
+
+                        // 2. Re-insert complete block nodes
+                        let insertedBlocksSize = 0;
+                        if (blocksStart < blocksEnd) {
+                          const blockSlice = oldState.doc.slice(blocksStart, blocksEnd);
+                          if (blockSlice.openStart === 0 && blockSlice.openEnd === 0 && blockSlice.content.size > 0) {
+                            tr.insert(insertBlocksAt, blockSlice.content);
+                            tr.addMark(insertBlocksAt, insertBlocksAt + blockSlice.content.size, deleteMark);
+                            insertedBlocksSize = blockSlice.content.size;
+                            insertionOffset += insertedBlocksSize;
+                            hasChanges = true;
+                          }
+                        }
+
+                        // 3. Re-insert partial last paragraph as a ghost paragraph node
+                        if (slice.openEnd > 0 && $toOld.depth >= 1) {
+                          const lastInlineText = oldState.doc.textBetween($toOld.start(1), oldEnd, '\n');
+                          if (lastInlineText) {
+                            const textNode = newState.schema.text(lastInlineText, [deleteMark]);
+                            const paraNode = newState.schema.nodes.paragraph.create({}, textNode);
+                            const insertLastAt = insertBlocksAt + insertedBlocksSize;
+                            tr.insert(insertLastAt, paraNode);
+                            insertionOffset += paraNode.nodeSize;
+                            hasChanges = true;
+                          }
+                        }
+                      }
                     } else {
                       // Pure inline text deletion
                       const deletedText = oldState.doc.textBetween(oldStart, oldEnd, '\n');
