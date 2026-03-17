@@ -35,15 +35,20 @@ export function FindReplaceDialog({ editor, searchRef }: FindReplaceDialogProps)
       return;
     }
     triggerSearch(store.query);
-  }, [store.query, store.options.matchCase, store.options.wholeWord, store.options.regex, store.options.inSelection, store.options.selectionFrom, store.options.selectionTo, store.isOpen]);
+  // triggerSearch is stable when isRawMode/editor/searchRef are stable; options are
+  // read fresh inside it via getState(), so they don't need to be listed here.
+  }, [store.query, store.options.matchCase, store.options.wholeWord, store.options.regex, store.options.inSelection, store.options.selectionFrom, store.options.selectionTo, store.isOpen, triggerSearch, isRawMode, editor]);
 
   const triggerSearch = useCallback(
     (query: string) => {
+      // Read options fresh from the store at call time — avoids stale closure when
+      // options (matchCase, wholeWord, regex, etc.) change between renders.
+      const options = useFindReplaceStore.getState().options;
       if (isRawMode) {
-        searchRef.current?.setQuery(query, store.options);
+        searchRef.current?.setQuery(query, options);
         store.setMatchInfo(-1, -1);
       } else if (editor) {
-        editor.commands.setSearchQuery(query, store.options);
+        editor.commands.setSearchQuery(query, options);
         setTimeout(() => {
           const info = (editor.commands as unknown as Record<string, () => { count: number; index: number; scope: string; regexError: string | null }>).getMatchCount();
           store.setMatchInfo(info.count, info.index, info.scope !== 'text' ? (info.scope === 'mermaid' ? 'Mermaid' : 'Math') : null);
@@ -51,7 +56,7 @@ export function FindReplaceDialog({ editor, searchRef }: FindReplaceDialogProps)
         }, 20);
       }
     },
-    [isRawMode, editor, searchRef],
+    [isRawMode, editor, searchRef, store.setMatchInfo, store.setRegexError],
   );
 
   const handleFindNext = useCallback(() => {
