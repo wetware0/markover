@@ -14,6 +14,9 @@ import { StatusBar } from '../ui/statusbar/StatusBar';
 import { CommentsPanel } from '../collaboration/comments/CommentsPanel';
 import { TrackChangesPanel } from '../collaboration/track-changes/TrackChangesPanel';
 import { RawEditor } from '../editor/RawEditor';
+import { FindReplaceDialog } from '../ui/find-replace/FindReplaceDialog';
+import { useFindReplaceStore } from '../store/find-replace-store';
+import type { RawSearchHandle } from '../editor/RawEditor';
 import { HelpDialog } from '../ui/HelpDialog';
 import { AboutDialog } from '../ui/AboutDialog';
 import { KatexEditDialog } from '../ui/dialogs/KatexEditDialog';
@@ -46,6 +49,8 @@ export function App() {
   const [commentText, setCommentText] = useState('');
   // Raw editor content — use a ref so CodeMirror doesn't lose cursor on each keystroke
   const rawContentRef = useRef('');
+  const rawSearchRef = useRef<RawSearchHandle | null>(null);
+  const findReplaceStore = useFindReplaceStore();
   // Pending action waiting for "unsaved changes" confirmation
   const [discardConfirm, setDiscardConfirm] = useState<{ message: string; onProceed: () => void } | null>(null);
 
@@ -118,17 +123,37 @@ export function App() {
 
   const handleToggleRawMode = useCallback(() => {
     if (!isRawMode) {
+      // Switching WYSIWYG → Raw: clear TipTap decorations
+      editor?.commands.clearSearch();
+      findReplaceStore.clearMatchState();
       // WYSIWYG → Raw: serialize current content
       syncCommentsToMetadata();
       rawContentRef.current = getMarkdown();
       setRawMode(true);
+      if (findReplaceStore.isOpen && findReplaceStore.query) {
+        setTimeout(() => {
+          // Was WYSIWYG, now raw
+          rawSearchRef.current?.setQuery(findReplaceStore.query, findReplaceStore.options);
+          findReplaceStore.clearMatchState();
+        }, 50);
+      }
     } else {
+      // Switching Raw → WYSIWYG: clear CodeMirror state
+      rawSearchRef.current?.setQuery('', findReplaceStore.options);
+      findReplaceStore.clearMatchState();
       // Raw → WYSIWYG: parse raw content back into editor
       loadContent(rawContentRef.current);
       setComments(getMetadata().comments);
       setRawMode(false);
+      if (findReplaceStore.isOpen && findReplaceStore.query) {
+        setTimeout(() => {
+          // Was raw, now WYSIWYG
+          editor?.commands.setSearchQuery(findReplaceStore.query, findReplaceStore.options);
+          findReplaceStore.clearMatchState();
+        }, 50);
+      }
     }
-  }, [isRawMode, getMarkdown, loadContent, getMetadata, setComments, setRawMode, syncCommentsToMetadata]);
+  }, [isRawMode, getMarkdown, loadContent, getMetadata, setComments, setRawMode, syncCommentsToMetadata, editor, findReplaceStore]);
 
   const handleSave = useCallback(async () => {
     let content: string;
@@ -196,7 +221,14 @@ export function App() {
     setFile(null, 'Untitled');
     setComments([]);
     setChanges([]);
-  }, [isRawMode, loadContent, setFile, setComments, setChanges, setRawMode]);
+    editor?.commands.clearSearch();
+    findReplaceStore.clearMatchState();
+    if (findReplaceStore.isOpen && findReplaceStore.query) {
+      setTimeout(() => {
+        editor?.commands.setSearchQuery(findReplaceStore.query, findReplaceStore.options);
+      }, 50);
+    }
+  }, [isRawMode, loadContent, setFile, setComments, setChanges, setRawMode, editor, findReplaceStore]);
 
   const handleNew = useCallback(() => {
     guardDirty('You have unsaved changes. Create a new document anyway?', doNew);
@@ -453,6 +485,13 @@ export function App() {
         const meta = getMetadata();
         setComments(meta.comments);
         applyCspellIgnores(meta);
+        editor?.commands.clearSearch();
+        findReplaceStore.clearMatchState();
+        if (findReplaceStore.isOpen && findReplaceStore.query) {
+          setTimeout(() => {
+            editor?.commands.setSearchQuery(findReplaceStore.query, findReplaceStore.options);
+          }, 50);
+        }
       };
       guardDirty(`You have unsaved changes. Open "${data.fileName}" anyway?`, doLoad);
     });
@@ -475,6 +514,13 @@ export function App() {
               const meta = getMetadata();
               setComments(meta.comments);
               applyCspellIgnores(meta);
+              editor?.commands.clearSearch();
+              findReplaceStore.clearMatchState();
+              if (findReplaceStore.isOpen && findReplaceStore.query) {
+                setTimeout(() => {
+                  editor?.commands.setSearchQuery(findReplaceStore.query, findReplaceStore.options);
+                }, 50);
+              }
             }
           };
           guardDirty('You have unsaved changes. Open a different file anyway?', () => { void doOpen(); });
@@ -503,6 +549,24 @@ export function App() {
             setTrackChangesEnabled(next);
             if (next) { setSidebarOpen(true); setSidebarTab('changes'); }
           }
+          break;
+        }
+        case 'find-open': {
+          const sel = editor?.state.selection;
+          const prefill =
+            sel && !sel.empty
+              ? editor?.state.doc.textBetween(sel.from, sel.to, ' ')
+              : undefined;
+          findReplaceStore.open('find', prefill);
+          break;
+        }
+        case 'replace-open': {
+          const sel = editor?.state.selection;
+          const prefill =
+            sel && !sel.empty
+              ? editor?.state.doc.textBetween(sel.from, sel.to, ' ')
+              : undefined;
+          findReplaceStore.open('replace', prefill);
           break;
         }
         case 'publish': handlePublish(); break;
@@ -557,6 +621,7 @@ export function App() {
             value={rawContentRef.current}
             onChange={(v) => { rawContentRef.current = v; setDirty(true); }}
             isDark={resolvedTheme === 'dark'}
+            searchRef={rawSearchRef}
           />
         ) : (
         <div className="flex-1 overflow-y-auto print:overflow-visible bg-white dark:bg-gray-900" onClick={handleEditorClick}>
@@ -624,6 +689,9 @@ export function App() {
         )}
       </div>
       <StatusBar />
+
+      {/* Find / Replace dialog */}
+      <FindReplaceDialog editor={editor} searchRef={rawSearchRef} />
 
       {/* Help / user guide */}
       {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
