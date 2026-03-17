@@ -35,7 +35,7 @@ export function FindReplaceDialog({ editor, searchRef }: FindReplaceDialogProps)
       return;
     }
     triggerSearch(store.query);
-  }, [store.query, store.options.matchCase, store.options.wholeWord, store.options.regex, store.isOpen]);
+  }, [store.query, store.options.matchCase, store.options.wholeWord, store.options.regex, store.options.inSelection, store.options.selectionFrom, store.options.selectionTo, store.isOpen]);
 
   const triggerSearch = useCallback(
     (query: string) => {

@@ -5,7 +5,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { EditorView } from '@codemirror/view';
-import { SearchQuery, findNext, findPrevious, replaceNext, replaceAll, search } from '@codemirror/search';
+import { SearchQuery, findNext, findPrevious, replaceNext, replaceAll, search, setSearchQuery } from '@codemirror/search';
 import type { SearchOptions } from '../store/find-replace-store';
 
 export interface RawSearchHandle {
@@ -43,7 +43,7 @@ export function RawEditor({ value, onChange, isDark, searchRef }: RawEditorProps
           replace: '',
         });
         if (!sq.valid) return;
-        view.dispatch({ effects: sq.asEffect() });
+        view.dispatch({ effects: setSearchQuery.of(sq) });
       },
       findNext() {
         const view = cmRef.current?.view;
@@ -64,7 +64,7 @@ export function RawEditor({ value, onChange, isDark, searchRef }: RawEditorProps
           replace: replacement,
         });
         if (!sq.valid) return;
-        view.dispatch({ effects: sq.asEffect() });
+        view.dispatch({ effects: setSearchQuery.of(sq) });
         replaceNext(view);
       },
       replaceAll(replacement) {
@@ -78,7 +78,7 @@ export function RawEditor({ value, onChange, isDark, searchRef }: RawEditorProps
           replace: replacement,
         });
         if (!sq.valid) return;
-        view.dispatch({ effects: sq.asEffect() });
+        view.dispatch({ effects: setSearchQuery.of(sq) });
         replaceAll(view);
       },
       getMatchInfo() {

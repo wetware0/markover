@@ -5,6 +5,20 @@ import { createFindReplacePlugin, findReplacePluginKey, detectScope, getPluginSt
 import { useTrackChangesStore } from '../../collaboration/track-changes/track-changes-store';
 import type { SearchOptions } from '../../store/find-replace-store';
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    findReplace: {
+      setSearchQuery: (query: string, options: SearchOptions) => ReturnType;
+      findNext: () => ReturnType;
+      findPrev: () => ReturnType;
+      replaceMatch: (replacement: string) => ReturnType;
+      replaceAll: (replacement: string) => ReturnType;
+      clearSearch: () => ReturnType;
+      getMatchCount: () => ReturnType;
+    };
+  }
+}
+
 export const FindReplaceExtension = Extension.create({
   name: 'findReplace',
 

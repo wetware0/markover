@@ -150,6 +150,18 @@
         { "id": "12.1", "name": "User guide content (features, usage, shortcuts)", "status": "done", "notes": "HelpDialog covers all features: file ops, formatting shortcuts, comments, track changes, KaTeX, Mermaid, tables, images, file format." },
         { "id": "12.2", "name": "In-app help or bundled guide", "status": "done", "notes": "F1 or Help > User Guide opens the HelpDialog. Searchable. Also added Collaborate menu (Add Comment, Toggle Track Changes) and Help menu to native menu bar." }
       ]
+    },
+    {
+      "id": "phase-13",
+      "name": "Find & Replace",
+      "status": "done",
+      "tasks": [
+        { "id": "13.1", "name": "Find & Replace store (Zustand)", "status": "done", "notes": "find-replace-store.ts: query, replacement, options (matchCase, wholeWord, regex, wrap, inSelection, selectionFrom, selectionTo), match state, history." },
+        { "id": "13.2", "name": "FindReplaceDialog UI (draggable, tabbed)", "status": "done", "notes": "FindReplaceDialog.tsx: draggable floating panel, Find/Replace tabs, option checkboxes, status line, keyboard shortcuts (Enter/Shift+Enter/F3/Esc)." },
+        { "id": "13.3", "name": "TipTap FindReplaceExtension with ProseMirror plugin", "status": "done", "notes": "find-replace-extension.ts + find-replace-plugin.ts: highlights all matches, tracks currentIndex, supports text/mermaid/math scopes, regex, wholeWord, matchCase, inSelection, track-changes-aware replace." },
+        { "id": "13.4", "name": "CodeMirror (raw mode) search integration", "status": "done", "notes": "RawEditor.tsx exposes RawSearchHandle via searchRef. Uses @codemirror/search setSearchQuery.of(sq) (not the non-existent sq.asEffect()). findNext/findPrev/replace/replaceAll delegate to CodeMirror commands." },
+        { "id": "13.5", "name": "Bug fixes: CodeMirror API, type declarations, inSelection reactivity", "status": "done", "notes": "Fixed sq.asEffect() → setSearchQuery.of(sq). Added declare module '@tiptap/core' Commands augmentation. Added @codemirror/search to package.json. Added inSelection/selectionFrom/selectionTo to useEffect deps." }
+      ]
     }
   ],
   "statusLegend": {
