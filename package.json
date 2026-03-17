@@ -1,7 +1,7 @@
 {
   "name": "markover",
   "productName": "Markover",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Markdown WYSIWYG editor with Word-like collaboration features",
   "main": ".vite/build/main.js",
   "private": true,
