@@ -4,6 +4,14 @@ import { nanoid } from 'nanoid';
 import { createFindReplacePlugin, findReplacePluginKey, detectScope, getPluginState } from './find-replace-plugin';
 import { useTrackChangesStore } from '../../collaboration/track-changes/track-changes-store';
 import type { SearchOptions } from '../../store/find-replace-store';
+import type { Mark, Node as PmNode } from '@tiptap/pm/model';
+
+// Return the inline marks on the text node at `pos` in the document.
+// Used to preserve bold, italic, code, etc. on the replacement text.
+function getInlineMarksAtPos(doc: PmNode, pos: number): Mark[] {
+  const node = doc.resolve(pos).nodeAfter;
+  return node?.isText ? node.marks.slice() : [];
+}
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -101,6 +109,8 @@ export const FindReplaceExtension = Extension.create({
             const schema = state.schema;
             const { tr } = state;
 
+            const origMarks = getInlineMarksAtPos(state.doc, match.from);
+
             if (trackChangesOn) {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const author = (editor.storage.trackChangesPlugin as any)?.author ?? 'User';
@@ -109,7 +119,8 @@ export const FindReplaceExtension = Extension.create({
               const deleteMark = schema.marks.markovDelete?.create({ changeId: nanoid(8), author, date });
               tr.setMeta('trackChangesProcessed', true);
               if (replacement && insertMark) {
-                tr.insert(match.from, schema.text(replacement, [insertMark]));
+                // Preserve original inline formatting on the inserted replacement text
+                tr.insert(match.from, schema.text(replacement, [...origMarks, insertMark]));
               }
               if (deleteMark) {
                 const delFrom = match.from + replacement.length;
@@ -118,7 +129,8 @@ export const FindReplaceExtension = Extension.create({
               }
             } else {
               if (replacement) {
-                tr.replaceWith(match.from, match.to, schema.text(replacement));
+                // Preserve original inline formatting (bold, italic, etc.) on replacement
+                tr.replaceWith(match.from, match.to, schema.text(replacement, origMarks));
               } else {
                 tr.delete(match.from, match.to);
               }
@@ -181,10 +193,12 @@ export const FindReplaceExtension = Extension.create({
               const date = new Date().toISOString().split('T')[0];
               tr.setMeta('trackChangesProcessed', true);
               for (const m of sorted) {
+                // Read marks from original doc (state.doc) — positions are valid since we go reverse
+                const mOrigMarks = getInlineMarksAtPos(state.doc, m.from);
                 const insertMark = schema.marks.markovInsert?.create({ changeId: nanoid(8), author, date });
                 const deleteMark = schema.marks.markovDelete?.create({ changeId: nanoid(8), author, date });
                 if (replacement && insertMark) {
-                  tr.insert(m.from, schema.text(replacement, [insertMark]));
+                  tr.insert(m.from, schema.text(replacement, [...mOrigMarks, insertMark]));
                 }
                 if (deleteMark) {
                   tr.addMark(m.from + replacement.length, m.to + replacement.length, deleteMark);
@@ -193,7 +207,8 @@ export const FindReplaceExtension = Extension.create({
             } else {
               for (const m of sorted) {
                 if (replacement) {
-                  tr.replaceWith(m.from, m.to, schema.text(replacement));
+                  // Read marks from original doc — positions stable because we go reverse
+                  tr.replaceWith(m.from, m.to, schema.text(replacement, getInlineMarksAtPos(state.doc, m.from)));
                 } else {
                   tr.delete(m.from, m.to);
                 }
