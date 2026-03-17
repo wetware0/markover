@@ -78,6 +78,8 @@ function buildTextMatches(doc: PmNode, query: string, options: SearchOptions): T
 
   doc.descendants((node, pos) => {
     if (!node.isText || !node.text) return;
+    // Skip deleted ghost text (markovDelete). Inserted text (markovInsert) is
+    // intentionally included — it is visible in the document and valid to search.
     if (node.marks.some((m) => m.type.name === 'markovDelete')) return;
 
     const text = node.text;
@@ -86,6 +88,9 @@ function buildTextMatches(doc: PmNode, query: string, options: SearchOptions): T
     while ((m = pattern.exec(text)) !== null) {
       const from = pos + m.index;
       const to = from + m[0].length;
+      // Known limitation: matches that span text-node boundaries (e.g. bold within
+      // a sentence) are checked per-node. A cross-boundary match may be missed or
+      // partially included when inSelection is active.
       if (options.inSelection && options.selectionFrom !== undefined && options.selectionTo !== undefined) {
         if (from < options.selectionFrom || to > options.selectionTo) {
           if (m[0].length === 0) pattern.lastIndex++;
@@ -101,7 +106,7 @@ function buildTextMatches(doc: PmNode, query: string, options: SearchOptions): T
 }
 
 function buildAtomMatches(doc: PmNode, query: string, options: SearchOptions, scope: 'mermaid' | 'math'): AtomMatch[] {
-  const pattern = buildPattern(query, { ...options, regex: options.regex });
+  const pattern = buildPattern(query, options);
   if (!pattern) return [];
   const nodeTypes = scope === 'mermaid' ? ['mermaidBlock'] : ['katexBlock', 'katexInline'];
   const attr = scope === 'mermaid' ? 'code' : 'math';
@@ -201,6 +206,8 @@ export function createFindReplacePlugin(): Plugin {
 
         if (meta?.type === 'setIndex') {
           const index = meta.index;
+          // TODO: perf — for large match sets, swap only the changed decorations
+          // instead of rebuilding the full DecorationSet on every navigation step.
           const decorations = buildDecorations(newState.doc, value.matches, value.atomMatches, index, value.scope);
           return { ...value, currentIndex: index, decorations };
         }
@@ -237,3 +244,5 @@ export function createFindReplacePlugin(): Plugin {
 export function getPluginState(state: EditorState): FindReplacePluginState | null {
   return findReplacePluginKey.getState(state) ?? null;
 }
+
+export { buildTextMatches, buildAtomMatches, buildDecorations, validateRegex };
