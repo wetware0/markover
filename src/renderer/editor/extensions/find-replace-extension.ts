@@ -1,7 +1,9 @@
 // src/renderer/editor/extensions/find-replace-extension.ts
 import { Extension } from '@tiptap/core';
+import type { Editor } from '@tiptap/core';
 import { nanoid } from 'nanoid';
 import { createFindReplacePlugin, findReplacePluginKey, detectScope, getPluginState } from './find-replace-plugin';
+import type { SearchScope } from './find-replace-plugin';
 import { useTrackChangesStore } from '../../collaboration/track-changes/track-changes-store';
 import type { SearchOptions } from '../../store/find-replace-store';
 import type { Mark, Node as PmNode } from '@tiptap/pm/model';
@@ -22,9 +24,16 @@ declare module '@tiptap/core' {
       replaceMatch: (replacement: string) => ReturnType;
       replaceAll: (replacement: string) => ReturnType;
       clearSearch: () => ReturnType;
-      getMatchCount: () => ReturnType;
     };
   }
+}
+
+/** Read current match info directly from plugin state — avoids non-boolean command return type. */
+export function getMatchInfo(editor: Editor): { count: number; index: number; scope: SearchScope; regexError: string | null } {
+  const ps = getPluginState(editor.state);
+  if (!ps) return { count: 0, index: 0, scope: 'text', regexError: null };
+  const list = ps.scope === 'text' ? ps.matches : ps.atomMatches;
+  return { count: list.length, index: ps.currentIndex, scope: ps.scope, regexError: ps.regexError };
 }
 
 export const FindReplaceExtension = Extension.create({
@@ -257,12 +266,6 @@ export const FindReplaceExtension = Extension.create({
           return true;
         },
 
-      getMatchCount: () => ({ editor }) => {
-        const ps = getPluginState(editor.state);
-        if (!ps) return { count: 0, index: 0, scope: 'text' as const, regexError: null };
-        const list = ps.scope === 'text' ? ps.matches : ps.atomMatches;
-        return { count: list.length, index: ps.currentIndex, scope: ps.scope, regexError: ps.regexError };
-      },
     };
   },
 });
