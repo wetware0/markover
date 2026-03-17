@@ -663,7 +663,7 @@ export function App() {
           </div>
         ) : (
         <div className="flex-1 overflow-y-auto print:overflow-visible bg-white dark:bg-gray-900" onClick={handleEditorClick}>
-          <div className="max-w-4xl mx-auto" style={{ fontSize: `${zoomLevel}%` }}>
+          <div style={{ fontSize: `${zoomLevel}%` }}>
             <EditorContent editor={editor} className="min-h-full" />
           </div>
         </div>
