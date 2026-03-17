@@ -1,11 +1,13 @@
 import React from 'react';
 import { useEditorStore } from '../../store/editor-store';
 import { useTrackChangesStore } from '../../collaboration/track-changes/track-changes-store';
+import { useZoomStore } from '../../store/zoom-store';
 import { SpellCheck } from 'lucide-react';
 
 export function StatusBar() {
   const { fileName, isDirty, wordCount, charCount, cursorLine, cursorCol, isRawMode } = useEditorStore();
   const { enabled: trackChangesOn } = useTrackChangesStore();
+  const { zoomLevel, resetZoom } = useZoomStore();
 
   return (
     <div className="flex items-center justify-between px-4 py-1 text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 select-none print:hidden">
@@ -22,6 +24,13 @@ export function StatusBar() {
         )}
       </div>
       <div className="flex items-center gap-4">
+        <span
+          onClick={resetZoom}
+          title="Reset zoom (Ctrl+0)"
+          className="cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+        >
+          {zoomLevel}%
+        </span>
         <span className="flex items-center gap-1">
           <SpellCheck size={12} /> Spell Check
         </span>
