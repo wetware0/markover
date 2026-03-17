@@ -80,6 +80,17 @@ export function buildMenu(
         { role: 'copy' },
         { role: 'paste' },
         { role: 'selectAll' },
+        { type: 'separator' },
+        {
+          label: 'Find...',
+          accelerator: 'CmdOrCtrl+F',
+          click: () => sendAction('find-open'),
+        },
+        {
+          label: 'Replace...',
+          accelerator: 'CmdOrCtrl+H',
+          click: () => sendAction('replace-open'),
+        },
       ],
     },
     {
