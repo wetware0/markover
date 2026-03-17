@@ -32,9 +32,12 @@ import {
   Sun,
   Moon,
   Monitor,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { useThemeStore } from '../../store/theme-store';
 import { useUserStore, getInitials } from '../../store/user-store';
+import { useZoomStore } from '../../store/zoom-store';
 
 interface ToolbarProps {
   editor: Editor | null;
@@ -78,6 +81,7 @@ function ToolbarDivider() {
 export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onToggleSidebar, trackChangesEnabled, onToggleTrackChanges, onOpenUserSettings }: ToolbarProps) {
   const { mode, cycle } = useThemeStore();
   const { name, color } = useUserStore();
+  const { zoomLevel, zoomIn, zoomOut } = useZoomStore();
   const [linkDialog, setLinkDialog] = useState<{ href: string; text: string } | null>(null);
   const [imageInsertDialog, setImageInsertDialog] = useState(false);
   const linkInputRef = useRef<HTMLInputElement>(null);
@@ -259,6 +263,27 @@ export function Toolbar({ editor, isRawMode, onToggleRawMode, onAddComment, onTo
       </>)}
 
       <div className="flex-1" />
+
+      {/* Zoom controls */}
+      <ToolbarButton
+        onClick={zoomOut}
+        disabled={zoomLevel <= 50}
+        title="Zoom out (Ctrl+−)"
+      >
+        <ZoomOut size={iconSize} />
+      </ToolbarButton>
+      <span className="min-w-[3.5rem] text-center text-sm text-gray-700 dark:text-gray-300 select-none">
+        {zoomLevel}%
+      </span>
+      <ToolbarButton
+        onClick={zoomIn}
+        disabled={zoomLevel >= 200}
+        title="Zoom in (Ctrl++)"
+      >
+        <ZoomIn size={iconSize} />
+      </ToolbarButton>
+
+      <ToolbarDivider />
 
       {/* Raw mode toggle */}
       <ToolbarButton
