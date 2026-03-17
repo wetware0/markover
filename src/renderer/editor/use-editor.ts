@@ -58,6 +58,7 @@ import { MarkovHighlight } from './extensions/markover-highlight';
 import { MarkovInsert } from './extensions/markover-insert';
 import { MarkovDelete } from './extensions/markover-delete';
 import { TrackChangesPlugin } from './extensions/track-changes-plugin';
+import { FindReplaceExtension } from './extensions/find-replace-extension';
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -121,6 +122,7 @@ export function useMarkoverEditor() {
       MarkovInsert,
       MarkovDelete,
       TrackChangesPlugin,
+      FindReplaceExtension,
     ],
     content: '',
     onUpdate: ({ editor }) => {
