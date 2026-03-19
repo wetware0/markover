@@ -6,13 +6,16 @@ date: 2024-01-15
 
 # Markover Test Document
 
-This is a **bold** and *italic* test with some `inline code` and ~~strikethrough~~.
+This is a **bold** and _italic_ test with some `inline code` and ~~strikethrough~~.
 
 ## Lists
 
 - Bullet item 1
+
 - Bullet item 2
+
   - Nested item
+
 - Bullet item 3
 
 1. First ordered
@@ -21,9 +24,9 @@ This is a **bold** and *italic* test with some `inline code` and ~~strikethrough
 
 ## Task List
 
-- [x] Completed task
-- [ ] Incomplete task
-- [ ] Another task
+- Completed task
+- Incomplete task
+- Another task
 
 ## Code Block
 
@@ -35,13 +38,13 @@ function hello() {
 
 ## Blockquote
 
-> This is a blockquote.
+> This is a blockquote.  
 > It can span multiple lines.
 
 ## Table
 
 | Feature | Status | Notes |
-| --- | --- | --- |
+| --- | :---: | ---: |
 | Bold | Done | Works well |
 | Tables | Done | Basic support |
 | Images | Partial | URL only |
@@ -71,9 +74,6 @@ graph TD
 
 This has a footnote[^1] and another one[^2].
 
-[^1]: This is the first footnote.
-[^2]: This is the second footnote.
-
 ## Links and Images
 
 Here is a [link to GitHub](https://github.com) and an image:
@@ -83,3 +83,9 @@ Here is a [link to GitHub](https://github.com) and an image:
 ---
 
 That's all for now!
+
+---
+
+1. This is the first footnote. [↩︎](#fnref1)
+2. This is the second footnote. [↩︎](#fnref2)
+
