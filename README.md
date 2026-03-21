@@ -22,7 +22,8 @@ Built with Electron, React, and TipTap (ProseMirror).
 - **Diagrams** — Mermaid fenced code blocks rendered as diagrams; double-click to edit
 - **Footnotes** — Standard `[^1]` footnote syntax
 - **YAML front matter** — Displayed as a styled card at the top of the document
-- **Images** — Insert by URL, drag-and-drop, or paste; double-click to edit URL, alt text, and width
+- **Images** — Insert by URL, drag-and-drop, or paste; stored as relative paths from the document; double-click to edit URL, alt text, and width
+- **File attachments** — Drag any non-image file onto the editor to insert a clickable file-type icon linked to the file; icon colour reflects file type (PDF, Word, Excel, etc.)
 
 ### Collaboration
 

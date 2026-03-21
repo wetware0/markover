@@ -10,6 +10,7 @@ export interface SaveResult {
 }
 
 export const IPC_CHANNELS = {
+  PATH_RELATIVE: 'path:relative',
   FILE_OPEN: 'file:open',
   FILE_SAVE: 'file:save',
   FILE_SAVE_AS: 'file:save-as',
@@ -33,6 +34,8 @@ export const IPC_CHANNELS = {
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
 export interface ElectronAPI {
+  getPathForFile: (file: File) => string;
+  getRelativePath: (fromDir: string, toPath: string) => Promise<string>;
   openFile: () => Promise<FileData | null>;
   saveFile: (filePath: string, content: string) => Promise<SaveResult>;
   saveFileAs: (content: string) => Promise<SaveResult | null>;

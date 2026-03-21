@@ -367,6 +367,16 @@ ipcMain.handle(IPC_CHANNELS.FILE_OPEN_PATH, (_event, filePath: string) => {
   spawn(process.execPath, spawnArgs, { detached: true, stdio: 'ignore' }).unref();
 });
 
+ipcMain.handle(IPC_CHANNELS.PATH_RELATIVE, (_event, fromDir: string, toPath: string): string => {
+  // path.relative on Windows returns the absolute path when drives differ,
+  // which is exactly what we want as a fallback.
+  const rel = path.relative(fromDir, toPath);
+  // If the result starts with a drive letter it means we crossed drives —
+  // return the normalised absolute path so markdown stays valid.
+  if (/^[A-Za-z]:/.test(rel)) return toPath.replace(/\\/g, '/');
+  return rel.replace(/\\/g, '/');
+});
+
 ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, (_event, target: string) => {
   if (/^https?:\/\//i.test(target)) {
     void shell.openExternal(target);

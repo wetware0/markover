@@ -11,6 +11,12 @@ const md = new MarkdownIt({
   .use(taskLists, { enabled: true, label: true, labelAfter: true })
   .use(footnotePlugin);
 
+// Allow SVG data URIs in addition to the default (gif/png/jpeg/webp).
+// Used for embedded file-type icons inserted by the drag-and-drop handler.
+const defaultValidate = md.validateLink.bind(md);
+md.validateLink = (url: string) =>
+  /^data:image\/svg\+xml[,;]/i.test(url) || defaultValidate(url);
+
 // Inside blockquotes, convert soft line breaks to hard breaks so that
 // consecutive "> line1\n> line2" lines preserve their visual separation
 // instead of being silently merged into one paragraph.

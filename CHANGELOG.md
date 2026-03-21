@@ -4,6 +4,20 @@ All notable changes to Markover are documented here.
 
 ---
 
+## [1.0.5](https://github.com/pjwilliams2/markover/compare/v1.0.4...v1.0.5) — 2026-03-21
+
+### Added
+
+- **File attachment drop** — Dragging any non-image file onto the editor inserts a clickable file-type icon linked to the file (`[![name](icon)](path)`); icon colour reflects file type (PDF, Word, Excel, PowerPoint, archive, code, video, audio, etc.)
+- **Relative image paths** — Images and file links dragged onto the editor are stored as paths relative to the document location; absolute paths are used as fallback when the file is on a different drive or the document has not been saved yet
+
+### Fixed
+
+- Drag-and-drop used deprecated `file.path` (empty in Electron 32+); switched to `webUtils.getPathForFile()` so dropped images are correctly stored as local paths instead of base64 data URLs
+- SVG data URIs are now recognised as valid image sources by the markdown-it parser (previously blocked, causing dropped file icons to appear as raw markdown text after save/reload)
+
+---
+
 ## [1.0.4](https://github.com/pjwilliams2/markover/compare/v1.0.3...v1.0.4) — 2026-03-18
 
 ### Added

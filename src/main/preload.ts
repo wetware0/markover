@@ -1,7 +1,10 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { IPC_CHANNELS, type ElectronAPI } from '../shared/types/ipc';
 
 const api: ElectronAPI = {
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+  getRelativePath: (fromDir: string, toPath: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PATH_RELATIVE, fromDir, toPath),
   openFile: () => ipcRenderer.invoke(IPC_CHANNELS.FILE_OPEN),
   saveFile: (filePath: string, content: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.FILE_SAVE, filePath, content),
