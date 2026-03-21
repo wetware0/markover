@@ -50,6 +50,16 @@ Three Zustand stores:
 
 `src/shared/types/ipc.ts` defines all IPC channel names and the `ElectronAPI` interface shared between main and renderer.
 
+## Versioning
+
+When bumping the version, update **all three locations** — they must stay in sync:
+
+1. `package.json` — `"version"` field (use `npm version X.Y.Z --no-git-tag-version`)
+2. `package-lock.json` — updated automatically by `npm version`
+3. `forge.config.ts` — `packagerConfig.appVersion` (hardcoded string, must be updated manually)
+
+The auto-updater (`update-electron-app`) reads the version from the packaged binary, which comes from `forge.config.ts`. If `forge.config.ts` is out of sync the installed app will never see the new release as an update.
+
 ## Progress Tracking
 
 See `progress.json` for task status across all phases. Update it when completing or starting work.
