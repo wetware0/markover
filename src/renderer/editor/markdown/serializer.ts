@@ -320,7 +320,9 @@ const nodeHandlers: Record<string, NodeHandler> = {
       const titleAttr = title ? ` title="${title}"` : '';
       imageStr = `<img src="${src}" alt="${alt}"${titleAttr} width="${width}">`;
     } else {
-      imageStr = `![${alt}](${src}${title ? ` "${title}"` : ''})`;
+      // Wrap src in angle brackets if it contains whitespace (CommonMark-compatible)
+      const srcStr = /\s/.test(src) ? `<${src}>` : src;
+      imageStr = `![${alt}](${srcStr}${title ? ` "${title}"` : ''})`;
     }
 
     // Wrap in link syntax when the image was originally [![alt](src)](href)
