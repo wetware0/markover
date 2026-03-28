@@ -1,7 +1,7 @@
 {
   "project": "Markover",
   "description": "Markdown WYSIWYG editor with Word-like collaboration features",
-  "lastUpdated": "2026-03-14 (publish)",
+  "lastUpdated": "2026-03-28 (image-drop-dialog)",
   "phases": [
     {
       "id": "phase-1",
@@ -29,6 +29,7 @@
         { "id": "2.6", "name": "Footnotes", "status": "done" },
         { "id": "2.7", "name": "YAML front matter", "status": "done" },
         { "id": "2.8", "name": "Image drop/paste insertion", "status": "done" },
+        { "id": "2.8a", "name": "Image drop dialog with path/base64 options", "status": "done", "notes": "Dropping an image now shows an 'Insert Image' modal before inserting. Options: relative path (disabled with hint if doc unsaved), absolute path, or embed as Base64 data URL. Alt text pre-populated from filename. Dialog dispatched via markover:image-drop CustomEvent; App.tsx renders ImageDropDialog." },
         { "id": "2.9", "name": "Image resize UI and alt-text editing", "status": "done", "notes": "Double-click opens ImageEditDialog: edit URL, alt text, and width (presets: 25/50/75/100% or custom). Width serialized as <img> HTML tag for round-tripping. Toolbar link/image insert buttons now use proper React dialogs (window.prompt removed)." },
         { "id": "2.10", "name": "Table editing", "status": "done", "notes": "TableBubbleMenu floats when cursor is in a table: insert/delete/move columns and rows, delete table. Uses prosemirror-tables moveTableColumn/moveTableRow." },
         { "id": "2.11", "name": "Broken local images", "status": "not-started", "notes": "Images with relative file paths don't resolve because renderer base URL is the Vite dev server, not the file directory. Fix requires a custom protocol handler or path rewriting in the main process." }
