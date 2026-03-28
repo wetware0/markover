@@ -23,6 +23,7 @@ import { AboutDialog } from '../ui/AboutDialog';
 import { KatexEditDialog } from '../ui/dialogs/KatexEditDialog';
 import { MermaidEditDialog } from '../ui/dialogs/MermaidEditDialog';
 import { ImageEditDialog } from '../ui/dialogs/ImageEditDialog';
+import { ImageDropDialog } from '../ui/dialogs/ImageDropDialog';
 import { TableContextBar } from '../ui/table/TableContextBar';
 import { MessageSquare, GitCompare, X } from 'lucide-react';
 
@@ -32,6 +33,15 @@ interface PendingComment {
   from: number;
   to: number;
   commentId: string;
+}
+
+interface PendingImageDrop {
+  fileName: string;
+  relativePath: string;
+  absolutePath: string;
+  base64Src: string;
+  hasNativePath: boolean;
+  onConfirm: (src: string, alt: string) => void;
 }
 
 export function App() {
@@ -49,6 +59,7 @@ export function App() {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('comments');
   const [pendingComment, setPendingComment] = useState<PendingComment | null>(null);
   const [commentText, setCommentText] = useState('');
+  const [pendingImageDrop, setPendingImageDrop] = useState<PendingImageDrop | null>(null);
   // Raw editor content — use a ref so CodeMirror doesn't lose cursor on each keystroke
   const rawContentRef = useRef('');
   const rawSearchRef = useRef<RawSearchHandle | null>(null);
@@ -435,6 +446,15 @@ export function App() {
     return () => document.removeEventListener('markover:edit-node', handler);
   }, []);
 
+  // Listen for image drop events to show the insert dialog
+  useEffect(() => {
+    const handler = (e: Event) => {
+      setPendingImageDrop((e as CustomEvent).detail as PendingImageDrop);
+    };
+    document.addEventListener('markover:image-drop', handler);
+    return () => document.removeEventListener('markover:image-drop', handler);
+  }, []);
+
   // Ctrl+Wheel zoom
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -797,6 +817,20 @@ export function App() {
           href={nodeEdit.href}
           onSave={(attrs) => handleNodeEditSave(attrs)}
           onCancel={() => setNodeEdit(null)}
+        />
+      )}
+      {pendingImageDrop && (
+        <ImageDropDialog
+          fileName={pendingImageDrop.fileName}
+          relativePath={pendingImageDrop.relativePath}
+          absolutePath={pendingImageDrop.absolutePath}
+          base64Src={pendingImageDrop.base64Src}
+          hasNativePath={pendingImageDrop.hasNativePath}
+          onConfirm={(src, alt) => {
+            pendingImageDrop.onConfirm(src, alt);
+            setPendingImageDrop(null);
+          }}
+          onCancel={() => setPendingImageDrop(null)}
         />
       )}
 

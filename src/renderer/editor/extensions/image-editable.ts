@@ -56,7 +56,9 @@ export const MarkoverImage = Image.extend({
         },
         priority: 60, // higher than the default img rule (50) so this fires first
       },
-      ...(this.parent?.() ?? []),
+      // Use 'img[src]' without TipTap's default :not([src^="data:"]) restriction
+      // so that base64-embedded images survive the save → reload roundtrip.
+      { tag: 'img[src]' },
     ];
   },
 

@@ -14,6 +14,25 @@ async function resolveDroppedFilePath(filePath: string): Promise<string> {
   return filePath.replace(/\\/g, '/');
 }
 
+async function getDropPaths(filePath: string): Promise<{ relativePath: string; absolutePath: string }> {
+  const absolutePath = filePath.replace(/\\/g, '/');
+  const docPath = useEditorStore.getState().filePath;
+  if (docPath) {
+    const docDir = docPath.replace(/[/\\][^/\\]+$/, '');
+    const relativePath = await window.electronAPI.getRelativePath(docDir, filePath);
+    return { relativePath, absolutePath };
+  }
+  return { relativePath: '', absolutePath };
+}
+
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(file);
+  });
+}
+
 function insertImageAt(view: EditorView, pos: number | undefined, src: string, alt: string, href?: string) {
   const attrs: Record<string, string | null> = { src, alt, href: href ?? null };
   const node = view.state.schema.nodes.image.create(attrs);
@@ -44,18 +63,28 @@ export const ImageDrop = Extension.create({
                 const nativePath = window.electronAPI.getPathForFile(file);
 
                 if (file.type.startsWith('image/')) {
-                  // Insert as a plain image
-                  if (nativePath) {
-                    void resolveDroppedFilePath(nativePath).then((src) => {
-                      insertImageAt(view, pos?.pos, src, file.name);
-                    });
-                  } else {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      insertImageAt(view, pos?.pos, reader.result as string, file.name);
-                    };
-                    reader.readAsDataURL(file);
-                  }
+                  // Gather all options then show the Insert Image dialog
+                  const base64Promise = readFileAsDataURL(file);
+                  const pathPromise = nativePath
+                    ? getDropPaths(nativePath)
+                    : Promise.resolve({ relativePath: '', absolutePath: '' });
+
+                  void Promise.all([base64Promise, pathPromise]).then(([base64Src, { relativePath, absolutePath }]) => {
+                    document.dispatchEvent(
+                      new CustomEvent('markover:image-drop', {
+                        detail: {
+                          fileName: file.name,
+                          relativePath,
+                          absolutePath,
+                          base64Src,
+                          hasNativePath: !!nativePath,
+                          onConfirm: (src: string, alt: string) => {
+                            insertImageAt(view, pos?.pos, src, alt);
+                          },
+                        },
+                      }),
+                    );
+                  });
                 } else {
                   // Insert as a file-icon link: [![name](icon)](file)
                   if (nativePath) {
