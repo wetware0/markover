@@ -4,6 +4,32 @@ All notable changes to Markover are documented here.
 
 ---
 
+## [1.0.7](https://github.com/wetware0/markover/compare/v1.0.6...v1.0.7) — 2026-03-28
+
+### Added
+
+- **Image drop dialog** — Dropping an image onto the editor now shows an "Insert Image" dialog before inserting, giving the user control over the path format:
+  - **Use relative path** — stores the path relative to the document location (pre-checked when the document is saved; disabled with a hint otherwise)
+  - **Embed as Base64** — encodes the image as a `data:image/…;base64,…` URL embedded directly in the markdown file
+  - **Absolute path** — default when no document is saved or the image is on a different drive
+  - Alt text is pre-populated from the filename (minus extension) and is editable before inserting
+  - Live path preview updates reactively as options are toggled
+
+### Fixed
+
+- Base64-embedded images now survive the save → reload round-trip (relaxed TipTap `parseHTML` rule to allow `img[src]` without the `data:` exclusion)
+- `markdown-it` `validateLink` broadened to permit all `data:image/` URIs so base64 images are not stripped on parse
+
+---
+
+## [1.0.6](https://github.com/wetware0/markover/compare/v1.0.5...v1.0.6) — 2026-03-28
+
+### Fixed
+
+- Image paths containing spaces are now wrapped in angle brackets (`<…>`) in serialized markdown so they round-trip correctly
+
+---
+
 ## [1.0.5](https://github.com/pjwilliams2/markover/compare/v1.0.4...v1.0.5) — 2026-03-21
 
 ### Added
