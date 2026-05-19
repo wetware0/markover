@@ -670,6 +670,10 @@ export function App() {
           const next = !trackChangesEnabled;
           setTrackChangesEnabled(next);
           if (next) { setSidebarOpen(true); setSidebarTab('changes'); }
+          // Return focus to the editor so the next keyboard action (e.g.
+          // Ctrl+A then Delete to ghost-delete selected text) lands in the
+          // ProseMirror view instead of staying on the toolbar button.
+          editor?.commands.focus();
         }}
         onOpenUserSettings={() => setUserSettingsOpen(true)}
       />
