@@ -5,7 +5,10 @@ import type { Node, Mark } from '@tiptap/pm/model';
  */
 export function prosemirrorToMarkdown(doc: Node): string {
   const state = new MarkdownSerializerState();
-  state.renderContent(doc);
+  // Route through the doc handler so it can skip top-level artifacts (e.g.
+  // empty paragraphs left behind when block-level images are extracted from
+  // their <p> wrappers during parsing).
+  nodeHandlers.doc(state, doc, doc, 0);
   return state.getOutput();
 }
 
@@ -146,15 +149,17 @@ class MarkdownSerializerState {
   }
 
   renderList(node: Node, prefix: (index: number) => string) {
-    // A list is "loose" if any item has more than one meaningful child block.
-    // Empty paragraphs (artifacts from block node extraction) are excluded.
+    // A list is "loose" only if any item has more than one non-empty paragraph.
+    // Nested lists and other block children inside a list item do not make the
+    // outer list loose — they're rendered inline (continuation indent) without
+    // surrounding blank lines, which matches CommonMark's tight-list rendering.
     let isLoose = false;
     node.forEach((item) => {
-      let meaningful = 0;
+      let paragraphs = 0;
       item.forEach((child) => {
-        if (!(child.type.name === 'paragraph' && child.childCount === 0)) meaningful++;
+        if (child.type.name === 'paragraph' && child.childCount > 0) paragraphs++;
       });
-      if (meaningful > 1) isLoose = true;
+      if (paragraphs > 1) isLoose = true;
     });
 
     node.forEach((child, _offset, index) => {
@@ -219,7 +224,12 @@ type NodeHandler = (state: MarkdownSerializerState, node: Node, parent: Node, in
 
 const nodeHandlers: Record<string, NodeHandler> = {
   doc(state, node) {
-    state.renderContent(node);
+    node.forEach((child, _offset, index) => {
+      // Skip empty paragraphs that ProseMirror leaves behind when block-level
+      // nodes (e.g. images) are extracted from their <p> wrapper during parsing.
+      if (child.type.name === 'paragraph' && child.childCount === 0) return;
+      state.renderNode(child, node, index);
+    });
   },
 
   paragraph(state, node, parent) {
@@ -291,8 +301,12 @@ const nodeHandlers: Record<string, NodeHandler> = {
     inner.renderContent(node);
     const lines = inner.getOutput().replace(/\n+$/, '').split('\n');
     for (const line of lines) {
-      // Empty blockquote lines use '>' without a trailing space
-      state.write(line.length > 0 ? '> ' + line : '>');
+      // Strip the "  " hard-break trailing spaces inside a blockquote — the
+      // parser's blockquote_hard_breaks rule re-adds them on load, so leaving
+      // them in source would inflate the file two characters per line on
+      // every save.
+      const stripped = line.replace(/ {2,}$/, '');
+      state.write(stripped.length > 0 ? '> ' + stripped : '>');
       state.ensureNewLine();
     }
     state.closeBlock();

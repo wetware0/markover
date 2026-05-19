@@ -94,3 +94,6 @@ out/
 # Playwright
 test-results/
 playwright-report/
+
+# Stray vite preload build at repo root (build target is .vite/build/preload.js)
+/preload.js

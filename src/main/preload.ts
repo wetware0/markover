@@ -35,3 +35,13 @@ const api: ElectronAPI = {
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);
+
+// Expose the e2e-test flag so the renderer can suppress dialogs (e.g. the
+// beforeunload "you have unsaved changes" guard) that race Playwright's
+// teardown and produce spurious "No dialog is showing" failures.
+// Vite inlines process.env as {} in this bundle, so the main process passes
+// the flag via additionalArguments in webPreferences instead.
+contextBridge.exposeInMainWorld(
+  '__MARKOVER_E2E__',
+  process.argv.includes('--markover-e2e-test'),
+);

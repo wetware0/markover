@@ -111,6 +111,35 @@ export function markdownToHtml(markdown: string): string {
 
   html += md.render(body);
 
+  // markdown-it-task-lists emits <ul class="contains-task-list"><li class="task-list-item">
+  // <input class="task-list-item-checkbox"[ checked]> <label>...</label></li></ul>.
+  // TipTap's TaskList/TaskItem extensions look for data-type attributes and
+  // data-checked instead, so translate.
+  html = html.replace(/<ul class="contains-task-list">/g, '<ul data-type="taskList">');
+  html = html.replace(
+    /<li class="task-list-item[^"]*">\s*<input class="task-list-item-checkbox"([^>]*)>\s*<label[^>]*>([\s\S]*?)<\/label>\s*<\/li>/g,
+    (_, inputAttrs: string, labelContent: string) => {
+      const checked = /\bchecked\b/.test(inputAttrs) ? 'true' : 'false';
+      return `<li data-type="taskItem" data-checked="${checked}"><p>${labelContent.trim()}</p></li>`;
+    },
+  );
+
+  // markdown-it-footnote emits:
+  //   <hr class="footnotes-sep">
+  //   <section class="footnotes"><ol class="footnotes-list">
+  //     <li class="footnote-item">…</li>
+  //   </ol></section>
+  // TipTap parses the <hr> as a horizontalRule and the <ol> as an orderedList,
+  // burying the footnote definitions. Strip the entire wrapper in one pass,
+  // keeping just the inner <li class="footnote-item"> blocks so the
+  // FootnoteBlock extension can pick them up. Also strip the auto-generated
+  // backref anchor inside each footnote.
+  html = html.replace(
+    /<hr class="footnotes-sep"[^>]*>\s*<section class="footnotes">\s*<ol class="footnotes-list">\s*([\s\S]*?)\s*<\/ol>\s*<\/section>/g,
+    '$1',
+  );
+  html = html.replace(/\s*<a href="#fnref[^"]*" class="footnote-backref">[^<]*<\/a>/g, '');
+
   // Convert inline markover HTML comments to elements TipTap can parse
   html = html.replace(
     /&lt;!-- markover:hl-start id=&quot;([^&]*)&quot; --&gt;/g,

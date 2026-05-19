@@ -50,17 +50,26 @@ export const FootnoteBlock = Node.create({
 
   addAttributes() {
     return {
-      id: { default: '' },
+      id: {
+        default: '',
+        // markdown-it-footnote emits id="fn1" on the <li>. The serializer
+        // wants just the bare label (e.g. "1") so the saved markdown reads
+        // `[^1]: …`, not `[^fn1]: …`. Strip the prefix here so the attribute
+        // is consistently the bare id whichever path TipTap takes.
+        parseHTML: (el) =>
+          (el as HTMLElement).getAttribute('id')?.replace(/^fn/, '') || '',
+      },
     };
   },
 
   parseHTML() {
     return [
       {
+        // Higher than the default `li` rule (priority 50) so the FootnoteBlock
+        // wins over ListItem when both can match — otherwise an orphan
+        // <li class="footnote-item"> gets adopted into a bullet list.
         tag: 'li.footnote-item',
-        getAttrs: (el) => ({
-          id: (el as HTMLElement).getAttribute('id')?.replace('fn', '') || '',
-        }),
+        priority: 60,
       },
     ];
   },

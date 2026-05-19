@@ -14,7 +14,7 @@ test.describe('App smoke tests', () => {
   });
 
   test('toolbar is visible', async ({ page }) => {
-    const toolbar = page.locator('[class*="toolbar"]').first();
+    const toolbar = page.locator('[role="toolbar"]').first();
     await expect(toolbar).toBeVisible({ timeout: 10_000 });
   });
 

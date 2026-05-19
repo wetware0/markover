@@ -36,8 +36,12 @@ if (started) {
   app.quit();
 }
 
-// Check for updates from GitHub Releases on startup (packaged builds only)
-if (app.isPackaged) {
+// Check for updates from GitHub Releases on startup (packaged builds only).
+// MARKOVER_E2E_TEST lets the Playwright e2e suite skip network probes and
+// disable interactive dialogs so the test run doesn't hang on teardown.
+const IS_E2E_TEST = !!process.env.MARKOVER_E2E_TEST;
+
+if (app.isPackaged && !IS_E2E_TEST) {
   updateElectronApp({
     updateSource: {
       type: UpdateSourceType.ElectronPublicUpdateService,
@@ -146,6 +150,10 @@ const createWindow = async () => {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: true,
+      // Pass test-mode through to the preload via argv — Vite inlines
+      // process.env as {} in the preload bundle, so an argv flag is the
+      // reliable channel.
+      additionalArguments: IS_E2E_TEST ? ['--markover-e2e-test'] : [],
     },
   });
 
@@ -204,7 +212,14 @@ const createWindow = async () => {
   });
 
   // Guard: warn before close if renderer signals unsaved changes via beforeunload
-  mainWindow.webContents.on('will-prevent-unload', async (_event) => {
+  mainWindow.webContents.on('will-prevent-unload', async (event) => {
+    // In test mode, allow the close through without prompting — the e2e suite
+    // has no human to click "Save & Close" and Playwright's dialog handler
+    // races the dialog and produces spurious teardown failures.
+    if (IS_E2E_TEST) {
+      event.preventDefault();
+      return;
+    }
     // Do NOT call event.preventDefault() here — that would allow the close to proceed immediately.
     // Leaving it uncalled keeps the window blocked while we show our own dialog.
     const { response } = await dialog.showMessageBox(mainWindow!, {

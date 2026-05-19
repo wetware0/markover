@@ -90,8 +90,11 @@ export function App() {
     }
   }, []); // eslint-disable-line
 
-  // Warn before window close when dirty (main process shows native dialog)
+  // Warn before window close when dirty (main process shows native dialog).
+  // The e2e suite has no human to dismiss the prompt and the dialog races
+  // Playwright's teardown, so skip the guard in that environment.
   useEffect(() => {
+    if (window.__MARKOVER_E2E__) return;
     const handler = (e: BeforeUnloadEvent) => {
       if (isDirty) e.preventDefault(); // Triggers will-prevent-unload in main process
     };

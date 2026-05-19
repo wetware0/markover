@@ -33,9 +33,12 @@ test.describe('File round-tripping', () => {
   });
 
   test('markdown formatting round-trips through raw mode', async ({ page }) => {
+    // The serializer emits underscores for italics (CommonMark allows either,
+    // but `_` avoids ambiguity with `**bold**` and matches what the project
+    // standardised on in commit 0aa6da0).
     const markdownCases = [
       { type: 'Control+B', syntax: '**', text: 'bold' },
-      { type: 'Control+I', syntax: '*', text: 'italic' },
+      { type: 'Control+I', syntax: '_', text: 'italic' },
     ];
 
     for (const { type, syntax, text } of markdownCases) {

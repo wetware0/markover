@@ -13,9 +13,24 @@ npm start              # Run in dev mode (electron-forge start)
 npm run package        # Package the app
 npm run make           # Create distributable
 npm run lint           # ESLint (eslint --ext .ts,.tsx .)
+npm test               # Playwright e2e suite (auto-builds a test-mode package)
+npx tsx scripts/roundtrip-test.ts   # Headless markdown roundtrip suite (no Electron)
 ```
 
-No test framework is configured.
+### Testing
+
+Two layers:
+
+1. **Headless roundtrip suite** (`scripts/roundtrip-test.ts`): exercises the
+   real parser+serializer+codec under JSDOM. Fast (≈3s), covers every
+   markdown feature. Run this first when changing anything in
+   `src/renderer/editor/markdown/` or `src/shared/markover-codec/`.
+2. **Playwright e2e** (`tests/e2e/`): drives the packaged Electron app.
+   First run rebuilds with `MARKOVER_TEST_BUILD=1` so the `EnableNodeCliInspectArguments`
+   fuse is on (Playwright cannot attach otherwise). The fixture sets
+   `MARKOVER_E2E_TEST=1` in the launched process and passes
+   `--markover-e2e-test` via webPreferences.additionalArguments so the
+   renderer can skip the beforeunload guard during teardown.
 
 ## Architecture
 

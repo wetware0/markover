@@ -60,13 +60,15 @@ const config: ForgeConfig = {
       ],
     }),
     // Fuses are used to enable/disable various Electron functionality
-    // at package time, before code signing the application
+    // at package time, before code signing the application.
+    // MARKOVER_TEST_BUILD=1 re-enables the Node CLI inspect args so Playwright's
+    // _electron.launch() can attach. Release builds keep the security fuse on.
     new FusesPlugin({
       version: FuseVersion.V1,
       [FuseV1Options.RunAsNode]: false,
       [FuseV1Options.EnableCookieEncryption]: true,
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
-      [FuseV1Options.EnableNodeCliInspectArguments]: false,
+      [FuseV1Options.EnableNodeCliInspectArguments]: process.env.MARKOVER_TEST_BUILD === '1',
       [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),
