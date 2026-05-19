@@ -4,6 +4,24 @@ All notable changes to Markover are documented here.
 
 ---
 
+## [1.0.8](https://github.com/wetware0/markover/compare/v1.0.7...v1.0.8) — 2026-05-19
+
+### Fixed
+
+- **Task list checkbox state was lost on load** — `- [ ] todo` round-tripped as `- todo`. The markdown-it HTML didn't match TipTap's `data-type=taskItem`/`data-checked` parse rules; now translated in the parser.
+- **Footnote definitions were lost on load** — `[^1]: text` round-tripped as a horizontal rule plus an ordered list because markdown-it-footnote wraps the items in `<hr><section><ol>` and TipTap parsed those wrappers first. The wrappers are now stripped before TipTap sees the HTML, and `li.footnote-item` has higher parse priority than the generic `<li>` rule.
+- **Nested lists were promoted to "loose" on every save** — `- outer\n  - inner` inflated to `- outer\n\n  - inner` because the looseness check counted nested lists as "meaningful" block children. Only multiple non-empty paragraphs now trigger looseness.
+- **Blockquotes accumulated `  ` (hard-break trailing spaces) on every save** — the parser converts soft breaks to hard breaks inside blockquotes; the serializer was preserving the trailing spaces even though the parser would re-add them on load. Stripped on serialize.
+- **Block-level images gained two leading blank lines per save** — empty-paragraph artifacts left when ProseMirror extracts `<img>` out of its `<p>` wrapper. The serializer now skips empty top-level paragraphs.
+- **Toolbar "Track Changes" button left focus on itself** — subsequent keyboard shortcuts (e.g. Ctrl+A then Delete to ghost-delete) went to the button instead of the editor. Focus now returns to the editor after toggling.
+
+### Internal
+
+- Restored the Playwright e2e suite (was unable to launch the binary because of a security fuse and a teardown dialog race). Test builds opt into `EnableNodeCliInspectArguments` via `MARKOVER_TEST_BUILD=1`; tests run via `--markover-e2e-test` (set on `additionalArguments`) which the renderer reads to skip the unsaved-changes guard during teardown. Full suite is 27/27 in ~23 seconds.
+- New headless roundtrip suite at `scripts/roundtrip-test.ts` — 56 cases covering every markdown feature plus the Markover codec, runs without Electron under JSDOM in ~3 seconds. Recommended first-line check when changing anything in `src/renderer/editor/markdown/` or `src/shared/markover-codec/`.
+
+---
+
 ## [1.0.7](https://github.com/wetware0/markover/compare/v1.0.6...v1.0.7) — 2026-03-28
 
 ### Added
