@@ -40,6 +40,10 @@ Two layers:
 - **Preload** (`src/main/preload.ts`): Context bridge exposing `electronAPI` to renderer with context isolation
 - **Renderer** (`src/renderer/`): React app with TipTap editor
 
+**Vite build gotcha:** Vite inlines `process.env` as `{}` in the preload and renderer bundles. To pass a runtime flag from main → preload → renderer, use `webPreferences.additionalArguments: ['--my-flag']` and read it via `process.argv.includes(...)` in the preload. The existing `--markover-e2e-test` plumbing in `main.ts`/`preload.ts` is the reference pattern.
+
+**Toolbar button callbacks must refocus the editor.** Buttons that route through `editor.chain().focus().toggleX()` get this for free. Buttons that go through app-level callbacks (e.g. Track Changes, which updates a Zustand store) must call `editor?.commands.focus()` explicitly — otherwise the next keyboard action lands on the button, not the editor.
+
 **Key data flow:** User edits → TipTap editor → markdown serialization → Markover codec injects metadata as HTML comments → IPC → main process file I/O.
 
 ### Editor Layer
@@ -49,6 +53,12 @@ Two layers:
 Custom TipTap extensions live in `src/renderer/editor/extensions/` (KaTeX inline/block, Mermaid, footnotes, front matter, image drop, comment highlights, track change insert/delete marks, and the track-changes ProseMirror plugin).
 
 Markdown conversion: `src/renderer/editor/markdown/parser.ts` (markdown-it → HTML) and `serializer.ts` (ProseMirror → markdown).
+
+Conventions baked into the serializer (don't regress these — there are tests for them):
+- Italics use `_..._`, not `*...*` (avoids ambiguity with `**bold**`; set in commit `0aa6da0`)
+- Empty top-level paragraphs are skipped (artifacts of block extraction from `<p>` wrappers)
+- Blockquote `hardBreak` nodes don't emit trailing `  ` — the parser re-adds the hard break on load
+- A list is "loose" only if any item contains more than one non-empty paragraph (nested lists don't make the parent loose)
 
 ### Markover Codec (`src/shared/markover-codec/`)
 
@@ -67,13 +77,19 @@ Three Zustand stores:
 
 ## Versioning
 
-When bumping the version, update **all three locations** — they must stay in sync:
+When bumping the version, update **all four locations** — they must stay in sync:
 
 1. `package.json` — `"version"` field (use `npm version X.Y.Z --no-git-tag-version`)
 2. `package-lock.json` — updated automatically by `npm version`
 3. `forge.config.ts` — `packagerConfig.appVersion` (hardcoded string, must be updated manually)
+4. `CHANGELOG.md` — add a new section at the top under the title, following the format of prior entries (link, date, Added/Fixed/Internal subsections)
 
 The auto-updater (`update-electron-app`) reads the version from the packaged binary, which comes from `forge.config.ts`. If `forge.config.ts` is out of sync the installed app will never see the new release as an update.
+
+Publish workflow:
+1. Bump all four locations above, commit (`chore: bump version to X.Y.Z`), push
+2. `GITHUB_TOKEN=$(gh auth token) npm run publish` — packages, makes a Squirrel installer, uploads to a draft GitHub release
+3. `gh release edit vX.Y.Z --repo wetware0/markover --draft=false` — publish the release
 
 ## Progress Tracking
 
