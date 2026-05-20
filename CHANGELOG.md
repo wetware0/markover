@@ -4,6 +4,19 @@ All notable changes to Markover are documented here.
 
 ---
 
+## [1.0.9](https://github.com/wetware0/markover/compare/v1.0.8...v1.0.9) — 2026-05-20
+
+### Fixed
+
+- **Bold text selected with adjacent whitespace no longer reopens as literal asterisks** — markdown serialization now keeps leading/trailing whitespace outside flanking-sensitive mark delimiters, so selections like `**Bold **` are saved as `**Bold** ` and inter-word leading-space selections save as `Hello **Bold**`.
+- **Previously damaged bold markdown is recovered on load** — files containing `**Bold **`, `\*\*Bold \*\*`, or the equivalent leading-space form are parsed back into bold text and re-saved in valid markdown.
+
+### Internal
+
+- Expanded the headless markdown roundtrip suite to cover bold selections with leading/trailing whitespace and already-escaped malformed bold from previous saves.
+
+---
+
 ## [1.0.8](https://github.com/wetware0/markover/compare/v1.0.7...v1.0.8) — 2026-05-19
 
 ### Fixed

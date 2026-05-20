@@ -32,6 +32,35 @@ md.core.ruler.push('blockquote_hard_breaks', (state) => {
   }
 });
 
+md.core.ruler.after('inline', 'recover_malformed_strong_with_boundary_space', (state) => {
+  for (const token of state.tokens) {
+    if (token.type !== 'inline' || !token.children) continue;
+
+    const children: typeof token.children = [];
+    let text = '';
+
+    const flushText = () => {
+      if (!text) return;
+      children.push(...recoverMalformedStrongText(text, (type, tag, nesting) =>
+        new state.Token(type, tag, nesting),
+      ));
+      text = '';
+    };
+
+    for (const child of token.children) {
+      if (child.type === 'text' || child.type === 'text_special') {
+        text += child.content;
+      } else {
+        flushText();
+        children.push(child);
+      }
+    }
+    flushText();
+
+    token.children = children;
+  }
+});
+
 // Custom rule: inline math $...$
 md.inline.ruler.after('escape', 'katex_inline', (state, silent) => {
   if (state.src[state.pos] !== '$' || state.src[state.pos + 1] === '$') return false;
@@ -192,4 +221,69 @@ function escapeHtml(s: string): string {
 
 function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+type TokenNesting = -1 | 0 | 1;
+
+function recoverMalformedStrongText<T extends { content: string; markup: string }>(
+  content: string,
+  makeToken: (type: string, tag: string, nesting: TokenNesting) => T,
+): T[] {
+  const tokens: T[] = [];
+  let position = 0;
+
+  const pushText = (text: string) => {
+    if (!text) return;
+    const token = makeToken('text', '', 0);
+    token.content = text;
+    tokens.push(token);
+  };
+
+  while (position < content.length) {
+    const start = content.indexOf('**', position);
+    if (start === -1) {
+      pushText(content.slice(position));
+      break;
+    }
+
+    let searchFrom = start + 2;
+    let recovered = false;
+    while (searchFrom < content.length) {
+      const end = content.indexOf('**', searchFrom);
+      if (end === -1) break;
+
+      const inner = content.slice(start + 2, end);
+      const leadingSpace = inner.match(/^\s*/)?.[0] ?? '';
+      const trailingSpace = inner.match(/\s*$/)?.[0] ?? '';
+      const text = inner.trim();
+
+      if (text && (leadingSpace || trailingSpace)) {
+        pushText(content.slice(position, start) + leadingSpace);
+
+        const open = makeToken('strong_open', 'strong', 1);
+        open.markup = '**';
+        tokens.push(open);
+
+        pushText(text);
+
+        const close = makeToken('strong_close', 'strong', -1);
+        close.markup = '**';
+        tokens.push(close);
+
+        pushText(trailingSpace);
+        position = end + 2;
+        recovered = true;
+        break;
+      }
+
+      searchFrom = end + 2;
+    }
+
+    if (!recovered) {
+      pushText(content.slice(position, start + 2));
+      position = start + 2;
+    }
+  }
+
+  return tokens;
 }

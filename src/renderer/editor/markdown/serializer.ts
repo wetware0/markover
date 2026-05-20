@@ -23,6 +23,28 @@ function marksEqual(a: Mark, b: Mark): boolean {
   return keys.every((k) => aAttrs[k] === bAttrs[k]);
 }
 
+function markSetsEqual(a: readonly Mark[], b: readonly Mark[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((mark, i) => marksEqual(mark, b[i]));
+}
+
+function isFlankingSensitiveMark(mark: Mark): boolean {
+  return ['bold', 'strong', 'italic', 'em', 'strike'].includes(mark.type.name);
+}
+
+interface TextUnit {
+  kind: 'text';
+  text: string;
+  marks: Mark[];
+}
+
+interface LeafUnit {
+  kind: 'leaf';
+  node: Node;
+}
+
+type InlineUnit = TextUnit | LeafUnit;
+
 class MarkdownSerializerState {
   private output = '';
   private closed = false;
@@ -79,6 +101,19 @@ class MarkdownSerializerState {
     }
   }
 
+  private renderMarkedText(node: Node) {
+    const marks = node.marks;
+    for (const mark of marks) {
+      const wrapper = getMarkWrapper(mark);
+      if (wrapper) this.write(wrapper.open);
+    }
+    this.write(escapeMarkdown(node.text || '', marks));
+    for (let i = marks.length - 1; i >= 0; i--) {
+      const wrapper = getMarkWrapper(marks[i]);
+      if (wrapper) this.write(wrapper.close);
+    }
+  }
+
   /**
    * Render all inline children of a node using mark diffing.
    *
@@ -128,21 +163,37 @@ class MarkdownSerializerState {
       }
     };
 
-    node.forEach((child) => {
-      if (child.isText) {
-        transitionTo(child.marks);
-        this.write(escapeMarkdown(child.text || '', child.marks));
+    const units = getInlineUnitsWithMarkdownSafeMarks(node);
+    let pendingText = '';
+    let pendingMarks: readonly Mark[] = [];
+
+    const flushText = () => {
+      if (!pendingText) return;
+      transitionTo(pendingMarks);
+      this.write(escapeMarkdown(pendingText, pendingMarks));
+      pendingText = '';
+    };
+
+    for (const unit of units) {
+      if (unit.kind === 'text') {
+        if (pendingText && !markSetsEqual(pendingMarks, unit.marks)) {
+          flushText();
+        }
+        pendingText += unit.text;
+        pendingMarks = unit.marks;
       } else {
+        flushText();
         // For inline leaf nodes (hardBreak, katexInline, etc.) close all marks first
         transitionTo([]);
-        const handler = nodeHandlers[child.type.name];
-        if (child.isLeaf && handler) {
-          handler(this, child, node, 0);
+        const handler = nodeHandlers[unit.node.type.name];
+        if (unit.node.isLeaf && handler) {
+          handler(this, unit.node, node, 0);
         } else {
-          child.forEach((grandchild) => this.renderInline(grandchild));
+          unit.node.forEach((grandchild) => this.renderInline(grandchild));
         }
       }
-    });
+    }
+    flushText();
 
     // Close any remaining open marks
     transitionTo([]);
@@ -501,6 +552,94 @@ function getMarkWrapper(mark: Mark): { open: string; close: string } | null {
       };
     default:
       return null;
+  }
+}
+
+function getInlineUnitsWithMarkdownSafeMarks(node: Node): InlineUnit[] {
+  const units: InlineUnit[] = [];
+  let textUnits: TextUnit[] = [];
+
+  const flushTextUnits = () => {
+    if (textUnits.length > 0) {
+      units.push(...normalizeFlankingSensitiveMarks(textUnits));
+      textUnits = [];
+    }
+  };
+
+  node.forEach((child) => {
+    if (child.isText) {
+      textUnits.push({ kind: 'text', text: child.text || '', marks: [...child.marks] });
+    } else {
+      flushTextUnits();
+      units.push({ kind: 'leaf', node: child });
+    }
+  });
+
+  flushTextUnits();
+  return units;
+}
+
+function normalizeFlankingSensitiveMarks(units: TextUnit[]): TextUnit[] {
+  const chars = units.flatMap((unit) =>
+    Array.from(unit.text).map((text) => ({
+      text,
+      marks: [...unit.marks],
+    })),
+  );
+  const sensitiveMarks: Mark[] = [];
+
+  for (const char of chars) {
+    for (const mark of char.marks) {
+      if (isFlankingSensitiveMark(mark) && !sensitiveMarks.some((m) => marksEqual(m, mark))) {
+        sensitiveMarks.push(mark);
+      }
+    }
+  }
+
+  for (const mark of sensitiveMarks) {
+    let index = 0;
+    while (index < chars.length) {
+      if (!chars[index].marks.some((m) => marksEqual(m, mark))) {
+        index++;
+        continue;
+      }
+
+      const start = index;
+      while (index < chars.length && chars[index].marks.some((m) => marksEqual(m, mark))) {
+        index++;
+      }
+      const end = index;
+
+      let firstContent = start;
+      while (firstContent < end && /\s/.test(chars[firstContent].text)) {
+        removeMark(chars[firstContent].marks, mark);
+        firstContent++;
+      }
+
+      let lastContent = end - 1;
+      while (lastContent >= firstContent && /\s/.test(chars[lastContent].text)) {
+        removeMark(chars[lastContent].marks, mark);
+        lastContent--;
+      }
+    }
+  }
+
+  const normalized: TextUnit[] = [];
+  for (const char of chars) {
+    const last = normalized[normalized.length - 1];
+    if (last && markSetsEqual(last.marks, char.marks)) {
+      last.text += char.text;
+    } else {
+      normalized.push({ kind: 'text', text: char.text, marks: char.marks });
+    }
+  }
+  return normalized;
+}
+
+function removeMark(marks: Mark[], mark: Mark) {
+  const index = marks.findIndex((m) => marksEqual(m, mark));
+  if (index !== -1) {
+    marks.splice(index, 1);
   }
 }
 

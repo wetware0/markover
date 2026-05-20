@@ -126,6 +126,10 @@ function roundtrip(rawMarkdown: string): string {
   return serializeMarkoverFile(out, metadata);
 }
 
+function serializeDoc(docJson: Record<string, unknown>): string {
+  return prosemirrorToMarkdown(PMNode.fromJSON(schema, docJson));
+}
+
 interface Case {
   name: string;
   input: string;
@@ -150,6 +154,18 @@ const cases: Case[] = [
   { name: 'bold at start', input: '**bold** then plain\n' },
   { name: 'bold at end', input: 'plain then **bold**\n' },
   { name: 'bold whole sentence', input: '**entire sentence is bold**\n' },
+  { name: 'bold with selected trailing space', input: '**Bold **\n', expected: '**Bold** \n' },
+  { name: 'bold with selected leading inter-word space', input: 'Hello** Bold**\n', expected: 'Hello **Bold**\n' },
+  {
+    name: 'escaped malformed bold from previous save',
+    input: '\\*\\*Bold \\*\\*\n',
+    expected: '**Bold** \n',
+  },
+  {
+    name: 'escaped malformed bold with leading inter-word space from previous save',
+    input: 'Hello\\*\\* Bold\\*\\*\n',
+    expected: 'Hello **Bold**\n',
+  },
   {
     name: 'text with literal asterisk',
     input: 'price\\*\n',
@@ -299,6 +315,31 @@ const cases: Case[] = [
   { name: 'bracket characters', input: 'array \\[0\\] = 1\n' },
 ];
 
+const serializationCases: { name: string; docJson: Record<string, unknown>; expected: string }[] = [
+  {
+    name: 'bold mark over trailing space',
+    docJson: {
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [{ type: 'text', marks: [{ type: 'bold' }], text: 'Bold ' }],
+      }],
+    },
+    expected: '**Bold** \n',
+  },
+  {
+    name: 'bold mark over leading space',
+    docJson: {
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [{ type: 'text', marks: [{ type: 'bold' }], text: ' Bold' }],
+      }],
+    },
+    expected: ' **Bold**\n',
+  },
+];
+
 function diff(a: string, b: string): string {
   if (a === b) return '';
   const aLines = a.split('\n');
@@ -349,7 +390,31 @@ for (const c of cases) {
   }
 }
 
-console.log(`\n${passed} passed, ${failed} failed (${cases.length} total)\n`);
+for (const c of serializationCases) {
+  let got: string;
+  try {
+    got = serializeDoc(c.docJson);
+  } catch (err) {
+    failed++;
+    failures.push({
+      name: c.name,
+      input: JSON.stringify(c.docJson),
+      expected: c.expected,
+      got: `THROWN: ${(err as Error).message}\n${(err as Error).stack}`,
+    });
+    continue;
+  }
+  if (normalize(got) === normalize(c.expected)) {
+    passed++;
+    console.log(`  PASS  ${c.name}`);
+  } else {
+    failed++;
+    failures.push({ name: c.name, input: JSON.stringify(c.docJson), expected: c.expected, got });
+    console.log(`  FAIL  ${c.name}`);
+  }
+}
+
+console.log(`\n${passed} passed, ${failed} failed (${cases.length + serializationCases.length} total)\n`);
 
 if (failures.length > 0) {
   console.log('=== Failures ===\n');
