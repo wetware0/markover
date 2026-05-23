@@ -9,6 +9,7 @@ All notable changes to Markover are documented here.
 ### Security
 
 - **Patched CVE-2026-23950 in `tar`** — forced transitive dependency `tar` to 7.5.15 via npm `overrides` to eliminate the vulnerability present in all tar 6.x releases. Also consolidated the `flatted ^3.4.2` override from the prior security fix into the same block.
+- **fast-uri vulnerable to path traversal and host confusion** — forced transitive `fast-uri` to `^3.1.2` via npm `overrides`, patching CVE-2026-6321 (CVSS 7.5, path traversal via percent-encoded dot segments, fixed in 3.1.1) and CVE-2026-6322 (CVSS 7.5, host confusion via percent-encoded authority delimiters, fixed in 3.1.2). No source code changes.
 
 ---
 
