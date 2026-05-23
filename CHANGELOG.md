@@ -4,6 +4,14 @@ All notable changes to Markover are documented here.
 
 ---
 
+## [1.0.11](https://github.com/wetware0/markover/compare/v1.0.10...v1.0.11) — 2026-05-23
+
+### Security
+
+- **Patched CVE-2026-23950 in `tar`** — forced transitive dependency `tar` to 7.5.15 via npm `overrides` to eliminate the vulnerability present in all tar 6.x releases. Also consolidated the `flatted ^3.4.2` override from the prior security fix into the same block.
+
+---
+
 ## [1.0.10](https://github.com/wetware0/markover/compare/v1.0.9...v1.0.10) — 2026-05-23
 
 ### Fixed
