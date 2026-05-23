@@ -10,6 +10,7 @@ All notable changes to Markover are documented here.
 
 - **Patched CVE-2026-23950 in `tar`** — forced transitive dependency `tar` to 7.5.15 via npm `overrides` to eliminate the vulnerability present in all tar 6.x releases. Also consolidated the `flatted ^3.4.2` override from the prior security fix into the same block.
 - **fast-uri vulnerable to path traversal and host confusion** — forced transitive `fast-uri` to `^3.1.2` via npm `overrides`, patching CVE-2026-6321 (CVSS 7.5, path traversal via percent-encoded dot segments, fixed in 3.1.1) and CVE-2026-6322 (CVSS 7.5, host confusion via percent-encoded authority delimiters, fixed in 3.1.2). No source code changes.
+- **Upgraded `@xmldom/xmldom` override from `^0.8.13` to `^0.9.10`** — patches CVE-2026-34601 ([GHSA-wh4c-j3r5-mjhp](https://github.com/advisories/GHSA-wh4c-j3r5-mjhp)) — XML injection via unsafe CDATA serialization — and also covers CVE-2026-41675 ([GHSA-x6wf-f3px-wcqx](https://github.com/advisories/GHSA-x6wf-f3px-wcqx)) and CVE-2026-41672 ([GHSA-j759-j44w-7fr8](https://github.com/advisories/GHSA-j759-j44w-7fr8)) in `@xmldom/xmldom`, a transitive dependency via `plist` used by `@electron/osx-sign`, `@electron/packager`, and `@electron/universal`.
 
 ---
 
