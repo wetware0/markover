@@ -160,9 +160,17 @@ export function useMarkoverEditor() {
       // Clear undo/redo history so the file-load transaction cannot be Ctrl-Z'd.
       // EditorState.create reinitialises all plugin states (history included)
       // while keeping the current document and plugin configuration intact.
-      editor.view.updateState(
-        EditorState.create({ doc: editor.state.doc, plugins: editor.state.plugins }),
-      );
+      // Deferred to the next macrotask so React node views (e.g. CodeBlockView)
+      // can finish mounting from the setContent dispatch before the view tree
+      // is rebuilt from a fresh state — doing it synchronously crashes
+      // prosemirror-view's NodeViewDesc differ on certain doc shapes (e.g. a
+      // bullet list with inline `code` followed by an empty code block).
+      setTimeout(() => {
+        if (!editor || editor.isDestroyed) return;
+        editor.view.updateState(
+          EditorState.create({ doc: editor.state.doc, plugins: editor.state.plugins }),
+        );
+      }, 0);
 
       if (tcStorage) tcStorage.enabled = tcWasEnabled;
       isLoadingRef.current = false;
