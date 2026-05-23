@@ -1,7 +1,7 @@
 {
   "name": "markover",
   "productName": "Markover",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Markdown WYSIWYG editor with Word-like collaboration features",
   "main": ".vite/build/main.js",
   "private": true,
@@ -98,6 +98,7 @@
   },
   "overrides": {
     "flatted": "^3.4.2",
-    "@xmldom/xmldom": "^0.8.13"
+    "@xmldom/xmldom": "^0.8.13",
+    "tar": "7.5.15"
   }
 }
