@@ -71,6 +71,8 @@ if (app.isPackaged && !IS_E2E_TEST) {
 let mainWindow: BrowserWindow | null = null;
 let currentFilePath: string | null = null;
 let lastKnownMtimeMs: number | null = null;
+let sessionDocumentName = 'Untitled';
+let githubLogin: string | null = null;
 let recentFiles: string[] = [];
 
 const RECENT_PATH = path.join(app.getPath('userData'), 'recent-files.json');
@@ -113,8 +115,8 @@ async function addRecentFile(filePath: string): Promise<void> {
 
 function updateTitle() {
   if (!mainWindow) return;
-  const fileName = currentFilePath ? path.basename(currentFilePath) : 'Untitled';
-  mainWindow.setTitle(`${fileName} — Markover`);
+  const base = `${sessionDocumentName} — Markover`;
+  mainWindow.setTitle(githubLogin ? `${base} · GitHub: ${githubLogin}` : base);
 }
 
 function rebuildMenu() {
@@ -392,6 +394,14 @@ ipcMain.handle(IPC_CHANNELS.SPELLCHECK_SET_LANGUAGES, (_event, languages: string
 
 ipcMain.handle(IPC_CHANNELS.SPELLCHECK_ADD_WORD, (_event, word: string) => {
   session.defaultSession.addWordToSpellCheckerDictionary(word);
+});
+
+ipcMain.on(IPC_CHANNELS.SESSION_STATE, (_event, documentName: string, login: string | null) => {
+  const loginChanged = githubLogin !== login;
+  sessionDocumentName = documentName || 'Untitled';
+  githubLogin = login;
+  updateTitle();
+  if (loginChanged) rebuildMenu();
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_OS_USERNAME, () => {

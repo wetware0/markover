@@ -44,6 +44,8 @@ const api: ElectronAPI = {
     ipcRenderer.invoke(IPC_CHANNELS.GITHUB_GET_FILE, owner, repo, filePath, ref),
   githubPutFile: (owner: string, repo: string, filePath: string, content: string, message: string, branch: string, sha?: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.GITHUB_PUT_FILE, owner, repo, filePath, content, message, branch, sha),
+  notifySessionState: (documentName: string, githubLogin: string | null) =>
+    ipcRenderer.send(IPC_CHANNELS.SESSION_STATE, documentName, githubLogin),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

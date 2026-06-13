@@ -39,6 +39,7 @@ export const IPC_CHANNELS = {
   GITHUB_LIST_CONTENTS: 'github:list-contents',
   GITHUB_GET_FILE: 'github:get-file',
   GITHUB_PUT_FILE: 'github:put-file',
+  SESSION_STATE: 'session:state',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -69,6 +70,7 @@ export interface ElectronAPI {
   githubListContents: (owner: string, repo: string, dirPath: string, ref?: string) => Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>>;
   githubGetFile: (owner: string, repo: string, filePath: string, ref?: string) => Promise<{ content: string; sha: string }>;
   githubPutFile: (owner: string, repo: string, filePath: string, content: string, message: string, branch: string, sha?: string) => Promise<{ sha: string }>;
+  notifySessionState: (documentName: string, githubLogin: string | null) => void;
 }
 
 declare global {
