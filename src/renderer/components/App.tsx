@@ -195,6 +195,23 @@ export function App() {
   }, [isRawMode, getMarkdown, loadContent, getMetadata, setComments, setRawMode, syncCommentsToMetadata, editor, findReplaceStore]);
 
   const handleSave = useCallback(async () => {
+    if (githubSource) {
+      let ghContent: string;
+      if (isRawMode) ghContent = rawContentRef.current;
+      else { syncCommentsToMetadata(); ghContent = getMarkdown(); }
+      try {
+        const { sha } = await window.electronAPI.githubPutFile(
+          githubSource.owner, githubSource.repo, githubSource.path,
+          ghContent, `Edited ${githubSource.path} in Markover`, githubSource.branch, githubSource.sha,
+        );
+        setGithubSource({ ...githubSource, sha });
+        setDirty(false);
+        toast.success('Saved to GitHub');
+      } catch (e) {
+        toast.error(`GitHub save failed: ${(e as Error).message}`);
+      }
+      return;
+    }
     let content: string;
     if (isRawMode) {
       content = rawContentRef.current;
@@ -230,7 +247,7 @@ export function App() {
         toast.error(`Save failed: ${result.error}`);
       }
     }
-  }, [filePath, isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata]);
+  }, [filePath, isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata, githubSource, setGithubSource]);
 
   const handleSaveAs = useCallback(async () => {
     let content: string;
