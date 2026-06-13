@@ -31,6 +31,14 @@ export const IPC_CHANNELS = {
   GET_OS_USERNAME: 'os:get-username',
   SHELL_OPEN_PATH: 'shell:open-path',
   FILE_OPEN_PATH: 'file:open-path',
+  GITHUB_START_AUTH: 'github:start-auth',
+  GITHUB_POLL_AUTH: 'github:poll-auth',
+  GITHUB_SIGN_OUT: 'github:sign-out',
+  GITHUB_GET_USER: 'github:get-user',
+  GITHUB_LIST_REPOS: 'github:list-repos',
+  GITHUB_LIST_CONTENTS: 'github:list-contents',
+  GITHUB_GET_FILE: 'github:get-file',
+  GITHUB_PUT_FILE: 'github:put-file',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
@@ -53,6 +61,14 @@ export interface ElectronAPI {
   getOsUsername: () => Promise<string>;
   openPath: (path: string) => Promise<void>;
   openFilePath: (filePath: string) => Promise<void>;
+  githubStartAuth: () => Promise<{ user_code: string; verification_uri: string; device_code: string; interval: number; expires_in: number }>;
+  githubPollAuth: (deviceCode: string, interval: number, expiresIn: number) => Promise<boolean>;
+  githubSignOut: () => Promise<void>;
+  githubGetUser: () => Promise<{ login: string } | null>;
+  githubListRepos: () => Promise<Array<{ full_name: string; default_branch: string }>>;
+  githubListContents: (owner: string, repo: string, dirPath: string, ref?: string) => Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>>;
+  githubGetFile: (owner: string, repo: string, filePath: string, ref?: string) => Promise<{ content: string; sha: string }>;
+  githubPutFile: (owner: string, repo: string, filePath: string, content: string, message: string, branch: string, sha?: string) => Promise<{ sha: string }>;
 }
 
 declare global {

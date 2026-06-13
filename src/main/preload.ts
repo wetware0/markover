@@ -32,6 +32,18 @@ const api: ElectronAPI = {
   getOsUsername: () => ipcRenderer.invoke(IPC_CHANNELS.GET_OS_USERNAME),
   openPath: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.SHELL_OPEN_PATH, filePath),
   openFilePath: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.FILE_OPEN_PATH, filePath),
+  githubStartAuth: () => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_START_AUTH),
+  githubPollAuth: (deviceCode: string, interval: number, expiresIn: number) =>
+    ipcRenderer.invoke(IPC_CHANNELS.GITHUB_POLL_AUTH, deviceCode, interval, expiresIn),
+  githubSignOut: () => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_SIGN_OUT),
+  githubGetUser: () => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_GET_USER),
+  githubListRepos: () => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_LIST_REPOS),
+  githubListContents: (owner: string, repo: string, dirPath: string, ref?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.GITHUB_LIST_CONTENTS, owner, repo, dirPath, ref),
+  githubGetFile: (owner: string, repo: string, filePath: string, ref?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.GITHUB_GET_FILE, owner, repo, filePath, ref),
+  githubPutFile: (owner: string, repo: string, filePath: string, content: string, message: string, branch: string, sha?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.GITHUB_PUT_FILE, owner, repo, filePath, content, message, branch, sha),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

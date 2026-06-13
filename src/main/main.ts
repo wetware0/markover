@@ -42,6 +42,7 @@ async function atomicWrite(filePath: string, data: string | Uint8Array): Promise
 
 import { IPC_CHANNELS } from '../shared/types/ipc';
 import { buildMenu } from './menu';
+import { registerGitHubHandlers } from './github/ipc';
 
 // Must be called before app.ready
 protocol.registerSchemesAsPrivileged([
@@ -459,6 +460,8 @@ function isPathInside(candidate: string, root: string): boolean {
   const rel = path.relative(root, candidate);
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
+
+registerGitHubHandlers();
 
 app.on('ready', () => {
   protocol.handle('markover-asset', async (request) => {
