@@ -102,8 +102,18 @@ export async function submitReview(owner: string, repo: string, num: number, eve
     body: JSON.stringify({ event, body }),
   });
   if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Submit review failed (${res.status}): ${txt}`);
+    // Surface GitHub's human-readable reason (e.g. "Can not approve your own
+    // pull request") instead of dumping the raw JSON body.
+    let detail = `Submit review failed (${res.status})`;
+    try {
+      const j = (await res.json()) as { message?: string; errors?: unknown[] };
+      if (Array.isArray(j.errors) && j.errors.length) {
+        detail = j.errors.map((e) => (typeof e === 'string' ? e : JSON.stringify(e))).join('; ');
+      } else if (j.message) {
+        detail = j.message;
+      }
+    } catch { /* keep the default detail */ }
+    throw new Error(detail);
   }
 }
 

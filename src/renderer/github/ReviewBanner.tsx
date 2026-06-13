@@ -15,7 +15,13 @@ export function ReviewBanner({ onDone }: { onDone: () => void }) {
       toast.success(`Review submitted (${event.replace('_', ' ').toLowerCase()})`);
       onDone();
     } catch (e) {
-      toast.error(`Could not submit review: ${(e as Error).message}`);
+      const msg = (e as Error).message;
+      // GitHub forbids approving/changing your own PR — show a plain sentence.
+      if (/approve your own/i.test(msg)) {
+        toast.error("You can't approve your own pull request — try Comment instead.");
+      } else {
+        toast.error(`Could not submit review: ${msg}`);
+      }
     } finally {
       setBusy(false);
     }
