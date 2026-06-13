@@ -4,6 +4,14 @@ All notable changes to Markover are documented here.
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- **Patched runtime dependency advisories surfaced by Dependabot** — forced `dompurify` to `^3.4.0` (resolves to 3.4.10) and `uuid` to `^11.1.1` via npm `overrides`; both ship transitively through `mermaid` and are bundled into the renderer. Bumped `electron` from `41.0.2` to `41.1.0` to pick up its security patches. Remaining open alerts are development/build-tooling dependencies (esbuild, tmp, vite, postcss, etc.) that are not included in the packaged application.
+
+---
+
 ## [1.1.0](https://github.com/wetware0/markover/compare/v1.0.11...v1.1.0) — 2026-06-13
 
 ### Added
