@@ -51,7 +51,7 @@ interface PendingImageDrop {
 
 export function App() {
   const { editor, loadContent, getMarkdown, getMetadata, setMetadata } = useMarkoverEditor();
-  const { filePath, isDirty, setFile, setDirty, isRawMode, setRawMode } = useEditorStore();
+  const { filePath, isDirty, setFile, setDirty, isRawMode, setRawMode, fileName } = useEditorStore();
   const { setComments, comments, addComment, deleteComment: removeComment } = useCommentsStore();
   const { enabled: trackChangesEnabled, setEnabled: setTrackChangesEnabled, changes, setChanges, removeChange } = useTrackChangesStore();
   const { resolved: resolvedTheme } = useThemeStore();
@@ -75,6 +75,7 @@ export function App() {
   const [githubOpenOpen, setGithubOpenOpen] = useState(false);
   const githubSource = useGitHubStore((s) => s.source);
   const setGithubSource = useGitHubStore((s) => s.setSource);
+  const githubLogin = useGitHubStore((s) => s.login);
 
   // Node edit state (KaTeX / Mermaid click-to-edit dialogs)
   type NodeEdit =
@@ -103,6 +104,12 @@ export function App() {
     document.addEventListener('markover:untracked-edit', handler);
     return () => document.removeEventListener('markover:untracked-edit', handler);
   }, []);
+
+  // Keep the window title + native menu in sync with the open document and
+  // GitHub sign-in state (main composes the title and toggles the menu).
+  useEffect(() => {
+    window.electronAPI.notifySessionState(fileName || 'Untitled', githubLogin);
+  }, [fileName, githubLogin]);
 
   // Seed author name from OS login on first launch (only if no name persisted)
   useEffect(() => {
