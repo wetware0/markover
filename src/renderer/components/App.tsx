@@ -83,6 +83,20 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Warn (throttled) when the track-changes plugin can't cleanly track a
+  // structural edit and lets it through untracked.
+  useEffect(() => {
+    let last = 0;
+    const handler = () => {
+      const now = performance.now();
+      if (now - last < 4000) return;
+      last = now;
+      toast.info('A structural edit could not be tracked and was applied directly.');
+    };
+    document.addEventListener('markover:untracked-edit', handler);
+    return () => document.removeEventListener('markover:untracked-edit', handler);
+  }, []);
+
   // Seed author name from OS login on first launch (only if no name persisted)
   useEffect(() => {
     if (!userName.trim()) {
