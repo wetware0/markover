@@ -792,8 +792,8 @@ export function App() {
         case 'about': setAboutOpen(true); break;
         case 'github-sign-in': setGithubSignInOpen(true); break;
         case 'github-open': setGithubOpenOpen(true); break;
-        case 'github-save-as': if (githubLogin) setGithubSaveOpen(true); else toast.info('Sign in to GitHub first.'); break;
-        case 'github-review': if (githubLogin) setReviewDialogOpen(true); else toast.info('Sign in to GitHub first.'); break;
+        case 'github-save-as': if (useGitHubStore.getState().login) setGithubSaveOpen(true); else toast.info('Sign in to GitHub first.'); break;
+        case 'github-review': if (useGitHubStore.getState().login) setReviewDialogOpen(true); else toast.info('Sign in to GitHub first.'); break;
         case 'github-sign-out': {
           const proceed = !isDirty || window.confirm('You have unsaved changes. Sign out of GitHub anyway?');
           if (proceed) {
