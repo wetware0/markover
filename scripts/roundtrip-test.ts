@@ -272,6 +272,11 @@ const cases: Case[] = [
       'Body text.\n\n<!-- markover:meta\nversion: 1\nauthors:\n  - name: "Peter"\n    color: "#FF0000"\n-->\n',
   },
   {
+    name: 'comment with quotes in author name',
+    input:
+      'Body.\n\n<!-- markover:comment id="c1" author="John &quot;JJ&quot; Smith" date="2026-01-01" status="open" -->\nNote.\n<!-- /markover:comment -->\n',
+  },
+  {
     name: 'markover inline highlight (comment ref)',
     input:
       'Before <span data-markov="hl" data-comment-id="c1">highlighted text</span> after.\n',

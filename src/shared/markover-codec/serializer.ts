@@ -4,6 +4,10 @@ import type {
   FileMeta,
 } from './schema';
 
+function escAttr(v: string): string {
+  return String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
 /**
  * Serialize markover metadata into a markdown file.
  * Inline markers (highlights, insertions, deletions) are already embedded
@@ -42,11 +46,11 @@ export function serializeMarkoverFile(markdown: string, metadata: MarkovMetadata
 }
 
 function serializeComment(comment: Comment): string {
-  let block = `<!-- markover:comment id="${comment.id}" author="${comment.author}" date="${comment.date}" status="${comment.status}" -->\n`;
+  let block = `<!-- markover:comment id="${escAttr(comment.id)}" author="${escAttr(comment.author)}" date="${escAttr(comment.date)}" status="${escAttr(comment.status)}" -->\n`;
   block += comment.content + '\n';
 
   for (const reply of comment.replies) {
-    block += `<!-- markover:reply id="${reply.id}" parent="${reply.parentId}" author="${reply.author}" date="${reply.date}" -->\n`;
+    block += `<!-- markover:reply id="${escAttr(reply.id)}" parent="${escAttr(reply.parentId)}" author="${escAttr(reply.author)}" date="${escAttr(reply.date)}" -->\n`;
     block += reply.content + '\n';
     block += `<!-- /markover:reply -->\n`;
   }
@@ -62,8 +66,8 @@ function serializeFileMeta(meta: FileMeta): string {
   if (meta.authors.length > 0) {
     block += 'authors:\n';
     for (const author of meta.authors) {
-      block += `  - name: "${author.name}"\n`;
-      block += `    color: "${author.color}"\n`;
+      block += `  - name: "${escAttr(author.name)}"\n`;
+      block += `    color: "${escAttr(author.color)}"\n`;
     }
   }
 

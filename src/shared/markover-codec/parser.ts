@@ -140,13 +140,17 @@ export function parseMarkoverFile(source: string): ParseResult {
   return { cleanMarkdown, metadata };
 }
 
+function unescAttr(v: string): string {
+  return v.replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+}
+
 /** Parse key="value" pairs from an attribute string */
 function parseAttrs(attrString: string): Record<string, string> {
   const attrs: Record<string, string> = {};
   const re = /(\w+)="([^"]*)"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(attrString)) !== null) {
-    attrs[m[1]] = m[2];
+    attrs[m[1]] = unescAttr(m[2]);
   }
   return attrs;
 }
@@ -172,9 +176,9 @@ function parseFileMeta(content: string): FileMeta {
         if (currentAuthor?.name) {
           meta.authors.push({ name: currentAuthor.name, color: currentAuthor.color || '#888' });
         }
-        currentAuthor = { name: trimmed.slice(7).trim().replace(/^"|"$/g, '') };
+        currentAuthor = { name: unescAttr(trimmed.slice(7).trim().replace(/^"|"$/g, '')) };
       } else if (trimmed.startsWith('color:') && currentAuthor) {
-        currentAuthor.color = trimmed.slice(6).trim().replace(/^"|"$/g, '');
+        currentAuthor.color = unescAttr(trimmed.slice(6).trim().replace(/^"|"$/g, ''));
       }
     }
   }
