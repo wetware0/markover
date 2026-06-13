@@ -32,6 +32,7 @@ import { useGitHubStore, type GitHubSource } from '../github/github-store';
 import { GitHubSignInDialog } from '../github/GitHubSignInDialog';
 import { OpenFromGitHubDialog } from '../github/OpenFromGitHubDialog';
 import { SaveToGitHubDialog } from '../github/SaveToGitHubDialog';
+import { isProtectedOrForbidden, offerWriteFallback, notifyWriteFailed } from '../github/github-write-fallback';
 
 type SidebarTab = 'comments' | 'changes';
 
@@ -226,7 +227,17 @@ export function App() {
         setDirty(false);
         toast.success('Saved to GitHub');
       } catch (e) {
-        toast.error(`GitHub save failed: ${(e as Error).message}`);
+        if (isProtectedOrForbidden(e)) {
+          const choice = offerWriteFallback(`${githubSource.owner}/${githubSource.repo}`, githubSource.branch);
+          if (choice.action === 'choose-branch') {
+            setGithubSaveOpen(true);
+          } else if (choice.action === 'save-local') {
+            setGithubSource(null);
+            await handleSaveAs();
+          }
+        } else {
+          notifyWriteFailed(e);
+        }
       }
       return;
     }
@@ -265,7 +276,7 @@ export function App() {
         toast.error(`Save failed: ${result.error}`);
       }
     }
-  }, [filePath, isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata, githubSource, setGithubSource]);
+  }, [filePath, isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata, githubSource, setGithubSource, setGithubSaveOpen]);
 
   const handleSaveAs = useCallback(async () => {
     let content: string;
