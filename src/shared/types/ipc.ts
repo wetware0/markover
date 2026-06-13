@@ -8,6 +8,7 @@ export interface SaveResult {
   success: boolean;
   filePath: string;
   error?: string;
+  conflict?: boolean;
 }
 
 export const IPC_CHANNELS = {
@@ -38,7 +39,7 @@ export interface ElectronAPI {
   getPathForFile: (file: File) => string;
   getRelativePath: (fromDir: string, toPath: string) => Promise<string>;
   openFile: () => Promise<FileData | null>;
-  saveFile: (filePath: string, content: string) => Promise<SaveResult>;
+  saveFile: (filePath: string, content: string, force?: boolean) => Promise<SaveResult>;
   saveFileAs: (content: string) => Promise<SaveResult | null>;
   newFile: () => void;
   onMenuAction: (callback: (action: string) => void) => () => void;

@@ -6,8 +6,8 @@ const api: ElectronAPI = {
   getRelativePath: (fromDir: string, toPath: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.PATH_RELATIVE, fromDir, toPath),
   openFile: () => ipcRenderer.invoke(IPC_CHANNELS.FILE_OPEN),
-  saveFile: (filePath: string, content: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.FILE_SAVE, filePath, content),
+  saveFile: (filePath: string, content: string, force?: boolean) =>
+    ipcRenderer.invoke(IPC_CHANNELS.FILE_SAVE, filePath, content, force),
   saveFileAs: (content: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.FILE_SAVE_AS, content),
   newFile: () => ipcRenderer.invoke(IPC_CHANNELS.FILE_NEW),

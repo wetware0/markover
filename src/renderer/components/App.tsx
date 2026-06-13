@@ -186,6 +186,16 @@ export function App() {
       if (result.success) {
         setDirty(false);
         toast.success('Saved');
+      } else if (result.conflict) {
+        const overwrite = window.confirm(
+          'This file changed on disk since you opened it (it may have synced from another device). ' +
+          'Overwrite the version on disk with your changes?',
+        );
+        if (overwrite) {
+          const forced = await window.electronAPI.saveFile(filePath, content, true);
+          if (forced.success) { setDirty(false); toast.success('Saved (overwrote disk version)'); }
+          else toast.error(`Save failed: ${forced.error ?? 'unknown error'}`);
+        }
       } else {
         toast.error(`Save failed: ${result.error ?? 'unknown error'}`);
       }

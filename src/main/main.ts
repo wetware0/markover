@@ -69,6 +69,7 @@ if (app.isPackaged && !IS_E2E_TEST) {
 
 let mainWindow: BrowserWindow | null = null;
 let currentFilePath: string | null = null;
+let lastKnownMtimeMs: number | null = null;
 let recentFiles: string[] = [];
 
 const RECENT_PATH = path.join(app.getPath('userData'), 'recent-files.json');
@@ -126,6 +127,7 @@ async function openFileByPath(filePath: string): Promise<void> {
   if (!mainWindow) return;
   try {
     const content = await fs.readFile(filePath, 'utf-8');
+    lastKnownMtimeMs = (await fs.stat(filePath)).mtimeMs;
     currentFilePath = filePath;
     updateTitle();
     await addRecentFile(filePath);
@@ -287,6 +289,7 @@ ipcMain.handle(IPC_CHANNELS.FILE_OPEN, async () => {
 
   const filePath = result.filePaths[0];
   const content = await fs.readFile(filePath, 'utf-8');
+  lastKnownMtimeMs = (await fs.stat(filePath)).mtimeMs;
   currentFilePath = filePath;
   updateTitle();
   await addRecentFile(filePath);
@@ -298,9 +301,16 @@ ipcMain.handle(IPC_CHANNELS.FILE_OPEN, async () => {
   };
 });
 
-ipcMain.handle(IPC_CHANNELS.FILE_SAVE, async (_event, filePath: string, content: string) => {
+ipcMain.handle(IPC_CHANNELS.FILE_SAVE, async (_event, filePath: string, content: string, force = false) => {
   try {
+    if (!force && isSamePath(filePath, currentFilePath || '') && lastKnownMtimeMs !== null) {
+      const onDisk = await fs.stat(filePath).then((s) => s.mtimeMs).catch(() => null);
+      if (onDisk !== null && onDisk > lastKnownMtimeMs + 1) {
+        return { success: false, filePath, conflict: true };
+      }
+    }
     await atomicWrite(filePath, content);
+    lastKnownMtimeMs = (await fs.stat(filePath)).mtimeMs;
     currentFilePath = filePath;
     updateTitle();
     await addRecentFile(filePath);
@@ -325,6 +335,7 @@ ipcMain.handle(IPC_CHANNELS.FILE_SAVE_AS, async (_event, content: string) => {
 
   try {
     await atomicWrite(result.filePath, content);
+    lastKnownMtimeMs = (await fs.stat(result.filePath)).mtimeMs;
     currentFilePath = result.filePath;
     updateTitle();
     await addRecentFile(result.filePath);
