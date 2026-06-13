@@ -343,6 +343,27 @@ const cases: Case[] = [
   // === Escaping ===
   { name: 'plain asterisks (escaped)', input: 'a \\*not bold\\* b\n' },
   { name: 'bracket characters', input: 'array \\[0\\] = 1\n' },
+
+  // === Codec malformed-input (graceful degradation) ===
+  {
+    name: 'unmatched comment end marker is ignored',
+    input: 'Body text.\n\n<!-- /markover:comment -->\n',
+    expected: 'Body text.\n',
+  },
+  {
+    name: 'comment block missing required attrs does not crash',
+    input:
+      'Body.\n\n<!-- markover:comment id="c1" -->\nOrphan note.\n<!-- /markover:comment -->\n',
+    expected:
+      'Body.\n\n<!-- markover:comment id="c1" author="" date="" status="open" -->\nOrphan note.\n<!-- /markover:comment -->\n',
+  },
+  {
+    name: 'malformed file meta version falls back to 1',
+    input: 'Body.\n\n<!-- markover:meta\nversion: abc\n-->\n',
+    // parseInt('abc', 10) === NaN; NaN || 1 falls back to version 1.
+    // The meta block is preserved with the corrected version field.
+    expected: 'Body.\n\n<!-- markover:meta\nversion: 1\n-->\n',
+  },
 ];
 
 const serializationCases: { name: string; docJson: Record<string, unknown>; expected: string }[] = [
@@ -441,6 +462,36 @@ for (const c of serializationCases) {
     failed++;
     failures.push({ name: c.name, input: JSON.stringify(c.docJson), expected: c.expected, got });
     console.log(`  FAIL  ${c.name}`);
+  }
+}
+
+// Codec metadata round-trip: literal quotes/ampersands in attribute values must
+// survive serialize → parse (they can't be expressed as harness `cases` because a
+// literal quote in a file is itself the malformed state escaping is meant to fix).
+{
+  const meta = {
+    highlights: [], comments: [{
+      id: 'c1', author: 'John "JJ" & Co', date: '2026-01-01',
+      status: 'open' as const, content: 'note', replies: [],
+    }],
+    insertions: [], deletions: [],
+    fileMeta: { version: 1, authors: [{ name: 'A "B"', color: '#fff' }] },
+    cspellIgnores: [],
+  };
+  const file = serializeMarkoverFile('Body.\n', meta);
+  const { metadata } = parseMarkoverFile(file);
+  const ok = metadata.comments[0]?.author === 'John "JJ" & Co'
+    && metadata.fileMeta?.authors[0]?.name === 'A "B"';
+  if (ok) { passed++; console.log('  PASS  codec literal-quote attribute round-trip'); }
+  else {
+    failed++;
+    failures.push({
+      name: 'codec literal-quote attribute round-trip',
+      input: JSON.stringify(meta.comments[0]),
+      expected: 'John "JJ" & Co',
+      got: JSON.stringify(metadata.comments[0]?.author),
+    });
+    console.log('  FAIL  codec literal-quote attribute round-trip');
   }
 }
 
