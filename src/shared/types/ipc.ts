@@ -42,6 +42,10 @@ export const IPC_CHANNELS = {
   GITHUB_LIST_BRANCHES: 'github:list-branches',
   GITHUB_GET_BRANCH_SHA: 'github:get-branch-sha',
   GITHUB_CREATE_BRANCH: 'github:create-branch',
+  GITHUB_LIST_PRS: 'github:list-prs',
+  GITHUB_LIST_PR_FILES: 'github:list-pr-files',
+  GITHUB_GET_PR: 'github:get-pr',
+  GITHUB_SUBMIT_REVIEW: 'github:submit-review',
   SESSION_STATE: 'session:state',
 } as const;
 
@@ -76,6 +80,10 @@ export interface ElectronAPI {
   githubListBranches: (owner: string, repo: string) => Promise<Array<{ name: string; protected: boolean }>>;
   githubGetBranchSha: (owner: string, repo: string, branch: string) => Promise<string>;
   githubCreateBranch: (owner: string, repo: string, newBranch: string, fromSha: string) => Promise<void>;
+  githubListPullRequests: (owner: string, repo: string) => Promise<Array<{ number: number; title: string; user: string; base: string; head: string; updated_at: string }>>;
+  githubListPullRequestFiles: (owner: string, repo: string, num: number) => Promise<Array<{ filename: string; status: string }>>;
+  githubGetPullRequest: (owner: string, repo: string, num: number) => Promise<{ baseSha: string; headSha: string; baseRef: string; headRef: string; author: string }>;
+  githubSubmitReview: (owner: string, repo: string, num: number, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body: string) => Promise<void>;
   notifySessionState: (documentName: string, githubLogin: string | null) => void;
 }
 

@@ -47,6 +47,10 @@ const api: ElectronAPI = {
   githubListBranches: (owner: string, repo: string) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_LIST_BRANCHES, owner, repo),
   githubGetBranchSha: (owner: string, repo: string, branch: string) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_GET_BRANCH_SHA, owner, repo, branch),
   githubCreateBranch: (owner: string, repo: string, newBranch: string, fromSha: string) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_CREATE_BRANCH, owner, repo, newBranch, fromSha),
+  githubListPullRequests: (owner: string, repo: string) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_LIST_PRS, owner, repo),
+  githubListPullRequestFiles: (owner: string, repo: string, num: number) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_LIST_PR_FILES, owner, repo, num),
+  githubGetPullRequest: (owner: string, repo: string, num: number) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_GET_PR, owner, repo, num),
+  githubSubmitReview: (owner: string, repo: string, num: number, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body: string) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_SUBMIT_REVIEW, owner, repo, num, event, body),
   notifySessionState: (documentName: string, githubLogin: string | null) =>
     ipcRenderer.send(IPC_CHANNELS.SESSION_STATE, documentName, githubLogin),
 };

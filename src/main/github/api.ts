@@ -74,6 +74,39 @@ export async function createBranch(owner: string, repo: string, newBranch: strin
   }
 }
 
+export interface PullRequest { number: number; title: string; user: string; base: string; head: string; updated_at: string; }
+
+export async function listPullRequests(owner: string, repo: string): Promise<PullRequest[]> {
+  const res = await gh(`/repos/${owner}/${repo}/pulls?state=open&per_page=100`);
+  if (!res.ok) throw new Error(`List pull requests failed (${res.status})`);
+  const data = (await res.json()) as Array<{ number: number; title: string; user: { login: string }; base: { ref: string }; head: { ref: string }; updated_at: string }>;
+  return data.map((p) => ({ number: p.number, title: p.title, user: p.user.login, base: p.base.ref, head: p.head.ref, updated_at: p.updated_at }));
+}
+
+export async function listPullRequestFiles(owner: string, repo: string, num: number): Promise<{ filename: string; status: string }[]> {
+  const res = await gh(`/repos/${owner}/${repo}/pulls/${num}/files?per_page=100`);
+  if (!res.ok) throw new Error(`List PR files failed (${res.status})`);
+  return (await res.json()) as { filename: string; status: string }[];
+}
+
+export async function getPullRequest(owner: string, repo: string, num: number): Promise<{ baseSha: string; headSha: string; baseRef: string; headRef: string; author: string }> {
+  const res = await gh(`/repos/${owner}/${repo}/pulls/${num}`);
+  if (!res.ok) throw new Error(`Get PR failed (${res.status})`);
+  const p = (await res.json()) as { base: { sha: string; ref: string }; head: { sha: string; ref: string }; user: { login: string } };
+  return { baseSha: p.base.sha, headSha: p.head.sha, baseRef: p.base.ref, headRef: p.head.ref, author: p.user.login };
+}
+
+export async function submitReview(owner: string, repo: string, num: number, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body: string): Promise<void> {
+  const res = await gh(`/repos/${owner}/${repo}/pulls/${num}/reviews`, {
+    method: 'POST',
+    body: JSON.stringify({ event, body }),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Submit review failed (${res.status}): ${txt}`);
+  }
+}
+
 // Commit a file via the Contents API. `sha` must be the current blob sha when updating.
 export async function putFile(
   owner: string, repo: string, filePath: string,
