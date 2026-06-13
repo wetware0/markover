@@ -4,6 +4,22 @@ All notable changes to Markover are documented here.
 
 ---
 
+## [1.1.0](https://github.com/wetware0/markover/compare/v1.0.11...v1.1.0) — 2026-06-13
+
+### Added
+
+- **GitHub integration** — sign in with GitHub (device flow; token encrypted via the OS keystore and restored on startup), Open a Markdown file from any repository, and commit edits back on save.
+- **Save to GitHub** — publish a local or new document to a repository with a repo / folder / filename / branch / commit-message picker. New branches default to `markover/<filename>`. The document becomes GitHub-backed so subsequent saves commit there.
+- **Branch-protection handling** — when a repository rejects a direct write (protected branch, missing permission, or SSO), Markover offers to choose another branch or save a copy locally instead of surfacing a raw error.
+- **Review a pull request** — open a pull request's Markdown changes as read-only track changes and submit an Approve / Request changes / Comment review.
+- **GitHub status in the window title and File menu** — the signed-in user appears in the title, and the menu toggles between *Sign in to GitHub* and *Sign out*. GitHub-opened files now update the window title correctly.
+
+### Internal
+
+- Headless unit tests for the window-title composer, branch-name helper, and the pull-request diff-to-track-changes converter (`scripts/test-github-units.ts`, additions to `scripts/roundtrip-test.ts`).
+
+---
+
 ## [1.0.11](https://github.com/wetware0/markover/compare/v1.0.10...v1.0.11) — 2026-05-23
 
 ### Security

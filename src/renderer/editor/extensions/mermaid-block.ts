@@ -61,7 +61,11 @@ export const MermaidBlock = Node.create({
           const { svg } = await mermaid.render(id, code);
           dom.innerHTML = svg;
         } catch {
-          dom.innerHTML = `<pre class="mermaid-error">${code}</pre>`;
+          dom.replaceChildren();
+          const pre = document.createElement('pre');
+          pre.className = 'mermaid-error';
+          pre.textContent = code; // textContent — never innerHTML — so diagram source can't inject markup
+          dom.appendChild(pre);
         }
       };
 

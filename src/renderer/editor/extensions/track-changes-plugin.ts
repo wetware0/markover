@@ -226,7 +226,12 @@ export const TrackChangesPlugin = Extension.create({
                     }
                   }
                 } catch {
-                  // Skip structural changes (e.g. node splits)
+                  // Structural change we can't track cleanly (e.g. node split).
+                  // Let the edit through but warn — a tracked document must never
+                  // contain silent, invisible edits.
+                  if (typeof document !== 'undefined') {
+                    document.dispatchEvent(new CustomEvent('markover:untracked-edit'));
+                  }
                 }
               }
             });

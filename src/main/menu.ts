@@ -6,6 +6,7 @@ export function buildMenu(
   window: BrowserWindow,
   recentFiles: string[],
   openFile: (filePath: string) => Promise<void>,
+  githubLogin: string | null,
 ): Menu {
   const sendAction = (action: string) => {
     window.webContents.send(IPC_CHANNELS.MENU_ACTION, action);
@@ -40,6 +41,13 @@ export function buildMenu(
           label: 'Open Recent',
           submenu: recentSubmenu,
         },
+        { type: 'separator' },
+        githubLogin
+          ? { label: `Sign out of GitHub (${githubLogin})`, click: () => sendAction('github-sign-out') } as MenuItemConstructorOptions
+          : { label: 'Sign in to GitHub...', click: () => sendAction('github-sign-in') } as MenuItemConstructorOptions,
+        { label: 'Open from GitHub...', click: () => sendAction('github-open') },
+        { label: 'Save to GitHub...', click: () => sendAction('github-save-as') },
+        { label: 'Review a Pull Request...', click: () => sendAction('github-review') },
         { type: 'separator' },
         {
           label: 'Save',

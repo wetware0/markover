@@ -1,7 +1,7 @@
 {
   "name": "markover",
   "productName": "Markover",
-  "version": "1.0.11",
+  "version": "1.1.0",
   "description": "Markdown WYSIWYG editor with Word-like collaboration features",
   "main": ".vite/build/main.js",
   "private": true,
@@ -88,7 +88,7 @@
     "markdown-it-footnote": "^4.0.0",
     "markdown-it-front-matter": "^0.2.4",
     "markdown-it-task-lists": "^2.1.1",
-    "mermaid": "^11.13.0",
+    "mermaid": "^11.15.0",
     "nanoid": "^5.1.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

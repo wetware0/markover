@@ -6,7 +6,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import { MarkoverImage } from './extensions/image-editable';
 import { MarkoverCodeBlock } from './extensions/code-block-lowlight';
-import TaskList from '@tiptap/extension-task-list';
+import { MarkoverTaskList } from './extensions/markover-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Highlight from '@tiptap/extension-highlight';
 import { Table } from '@tiptap/extension-table';
@@ -104,7 +104,7 @@ export function useMarkoverEditor() {
       Placeholder.configure({ placeholder: 'Start writing…' }),
       Link.configure({ openOnClick: false, autolink: true }),
       MarkoverImage,
-      TaskList,
+      MarkoverTaskList,
       TaskItem.configure({ nested: true }),
       Highlight.configure({ multicolor: true }),
       Table.configure({ resizable: true }),

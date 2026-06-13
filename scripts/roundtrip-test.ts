@@ -10,6 +10,7 @@
  * Reports per-case status with a unified diff when the output drifts.
  */
 
+import { toTrackedMarkdown } from '../src/renderer/github/pr-diff';
 import { JSDOM } from 'jsdom';
 
 // JSDOM must be installed before importing anything that touches prosemirror DOMParser
@@ -29,7 +30,7 @@ import { getSchema } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
-import TaskList from '@tiptap/extension-task-list';
+import { MarkoverTaskList } from '../src/renderer/editor/extensions/markover-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Highlight from '@tiptap/extension-highlight';
 import { Table } from '@tiptap/extension-table';
@@ -97,7 +98,7 @@ const extensions = [
   Underline,
   Link.configure({ openOnClick: false, autolink: true }),
   MarkoverImage,
-  TaskList,
+  MarkoverTaskList,
   TaskItem.configure({ nested: true }),
   Highlight.configure({ multicolor: true }),
   Table.configure({ resizable: true }),
@@ -272,6 +273,11 @@ const cases: Case[] = [
       'Body text.\n\n<!-- markover:meta\nversion: 1\nauthors:\n  - name: "Peter"\n    color: "#FF0000"\n-->\n',
   },
   {
+    name: 'comment with quotes in author name',
+    input:
+      'Body.\n\n<!-- markover:comment id="c1" author="John &quot;JJ&quot; Smith" date="2026-01-01" status="open" -->\nNote.\n<!-- /markover:comment -->\n',
+  },
+  {
     name: 'markover inline highlight (comment ref)',
     input:
       'Before <span data-markov="hl" data-comment-id="c1">highlighted text</span> after.\n',
@@ -291,6 +297,31 @@ const cases: Case[] = [
   {
     name: 'task list with multi-word labels',
     input: '- [ ] buy milk\n- [x] write code review\n',
+  },
+  {
+    name: 'task list with bold label (issue #22)',
+    input: '- [ ] **Task 1: Project scaffold**\n',
+  },
+  {
+    name: 'task list with bold label and nested bullets (issue #22)',
+    input: '- [ ] **Task 1: Project scaffold**\n  - Create the solution\n  - Add refs\n',
+  },
+  {
+    name: 'two bold tasks each with nested bullets (issue #22)',
+    input:
+      '- [ ] **Task 1: Scaffold**\n  - Create solution\n\n- [ ] **Task 2: Settings**\n  - POCO with defaults\n',
+  },
+  {
+    name: 'tight task list with nested bullets stays tight',
+    input: '- [ ] a\n  - sub\n- [ ] b\n',
+  },
+  {
+    name: 'task list with inline code label',
+    input: '- [ ] configure `settings.json`\n',
+  },
+  {
+    name: 'mixed checked/unchecked with formatting',
+    input: '- [x] **done** item\n- [ ] _todo_ item\n',
   },
   {
     name: 'multi-paragraph footnote',
@@ -313,6 +344,27 @@ const cases: Case[] = [
   // === Escaping ===
   { name: 'plain asterisks (escaped)', input: 'a \\*not bold\\* b\n' },
   { name: 'bracket characters', input: 'array \\[0\\] = 1\n' },
+
+  // === Codec malformed-input (graceful degradation) ===
+  {
+    name: 'unmatched comment end marker is ignored',
+    input: 'Body text.\n\n<!-- /markover:comment -->\n',
+    expected: 'Body text.\n',
+  },
+  {
+    name: 'comment block missing required attrs does not crash',
+    input:
+      'Body.\n\n<!-- markover:comment id="c1" -->\nOrphan note.\n<!-- /markover:comment -->\n',
+    expected:
+      'Body.\n\n<!-- markover:comment id="c1" author="" date="" status="open" -->\nOrphan note.\n<!-- /markover:comment -->\n',
+  },
+  {
+    name: 'malformed file meta version falls back to 1',
+    input: 'Body.\n\n<!-- markover:meta\nversion: abc\n-->\n',
+    // parseInt('abc', 10) === NaN; NaN || 1 falls back to version 1.
+    // The meta block is preserved with the corrected version field.
+    expected: 'Body.\n\n<!-- markover:meta\nversion: 1\n-->\n',
+  },
 ];
 
 const serializationCases: { name: string; docJson: Record<string, unknown>; expected: string }[] = [
@@ -414,7 +466,53 @@ for (const c of serializationCases) {
   }
 }
 
-console.log(`\n${passed} passed, ${failed} failed (${cases.length + serializationCases.length} total)\n`);
+// Codec metadata round-trip: literal quotes/ampersands in attribute values must
+// survive serialize → parse (they can't be expressed as harness `cases` because a
+// literal quote in a file is itself the malformed state escaping is meant to fix).
+{
+  const meta = {
+    highlights: [], comments: [{
+      id: 'c1', author: 'John "JJ" & Co', date: '2026-01-01',
+      status: 'open' as const, content: 'note', replies: [],
+    }],
+    insertions: [], deletions: [],
+    fileMeta: { version: 1, authors: [{ name: 'A "B"', color: '#fff' }] },
+    cspellIgnores: [],
+  };
+  const file = serializeMarkoverFile('Body.\n', meta);
+  const { metadata } = parseMarkoverFile(file);
+  const ok = metadata.comments[0]?.author === 'John "JJ" & Co'
+    && metadata.fileMeta?.authors[0]?.name === 'A "B"';
+  if (ok) { passed++; console.log('  PASS  codec literal-quote attribute round-trip'); }
+  else {
+    failed++;
+    failures.push({
+      name: 'codec literal-quote attribute round-trip',
+      input: JSON.stringify(meta.comments[0]),
+      expected: 'John "JJ" & Co',
+      got: JSON.stringify(metadata.comments[0]?.author),
+    });
+    console.log('  FAIL  codec literal-quote attribute round-trip');
+  }
+}
+
+{
+  const base = 'Line one.\n\nLine two.\n';
+  const head = 'Line one.\n\nLine two changed.\n';
+  const out = toTrackedMarkdown(base, head, 'alice', '2026-01-01');
+  const ok = out.includes('data-markov="del"') && out.includes('data-markov="ins"') && out.includes('Line one.');
+  if (ok) { passed++; console.log('  PASS  pr-diff marks a changed block'); }
+  else { failed++; failures.push({ name: 'pr-diff marks a changed block', input: head, expected: 'ins+del around changed block, line one untouched', got: out }); console.log('  FAIL  pr-diff marks a changed block'); }
+}
+{
+  const same = 'No change.\n';
+  const out = toTrackedMarkdown(same, same, 'alice', '2026-01-01');
+  const ok = !out.includes('data-markov');
+  if (ok) { passed++; console.log('  PASS  pr-diff: identical input has no marks'); }
+  else { failed++; failures.push({ name: 'pr-diff identical', input: same, expected: 'no markers', got: out }); console.log('  FAIL  pr-diff: identical input has no marks'); }
+}
+
+console.log(`\n${passed} passed, ${failed} failed (${passed + failed} total)\n`);
 
 if (failures.length > 0) {
   console.log('=== Failures ===\n');

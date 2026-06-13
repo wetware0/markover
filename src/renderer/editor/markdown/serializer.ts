@@ -63,6 +63,10 @@ class MarkdownSerializerState {
     }
   }
 
+  endsWithBlankLine(): boolean {
+    return this.output.endsWith('\n\n');
+  }
+
   closeBlock() {
     this.ensureNewLine();
     if (!this.output.endsWith('\n\n') && this.output.length > 0) {
@@ -314,17 +318,54 @@ const nodeHandlers: Record<string, NodeHandler> = {
   },
 
   taskList(state, node) {
-    node.forEach((child) => {
+    // Looseness is recorded at parse time via the `loose` attribute (set by the
+    // parser's markover_task_items rule from markdown-it's hidden-token signal).
+    // We also treat any item with more than one non-empty paragraph as loose —
+    // this covers documents edited in-app where the user adds a second paragraph.
+    // Nested lists do NOT make the parent loose (CLAUDE.md convention).
+    let isLoose = node.attrs.loose === true;
+    if (!isLoose) {
+      node.forEach((item) => {
+        let paragraphs = 0;
+        item.forEach((child) => {
+          if (child.type.name === 'paragraph' && child.childCount > 0) paragraphs++;
+        });
+        if (paragraphs > 1) isLoose = true;
+      });
+    }
+
+    node.forEach((child, _offset, itemIndex) => {
+      // Blank line between loose task items
+      if (itemIndex > 0 && isLoose && !state.endsWithBlankLine()) {
+        state.ensureNewLine();
+        state.write('\n');
+      }
       const checked = child.attrs.checked as boolean;
       state.write(checked ? '- [x] ' : '- [ ] ');
       // Render task item children
+      let first = true;
       child.forEach((grandchild) => {
         if (grandchild.type.name === 'paragraph') {
+          if (!first) {
+            if (isLoose && !state.endsWithBlankLine()) {
+              state.ensureNewLine();
+              state.write('\n');
+            }
+            state.write('  ');
+          }
           state.renderInlineContent(grandchild);
           state.ensureNewLine();
         } else {
-          state.renderNode(grandchild, child, 0);
+          // Block child (nested list, etc.) — render into sub-state and re-indent
+          const inner = new MarkdownSerializerState();
+          inner.renderNode(grandchild, child, 0);
+          const raw = inner.getOutput().replace(/\n+$/, '');
+          for (const line of raw.split('\n')) {
+            if (line.length > 0) state.write('  ' + line);
+            state.ensureNewLine();
+          }
         }
+        first = false;
       });
     });
     state.closeBlock();

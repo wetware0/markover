@@ -1,7 +1,7 @@
 import type { MarkovMetadata } from './schema';
 
 export interface ValidationError {
-  type: 'orphaned_highlight' | 'orphaned_comment' | 'missing_id' | 'duplicate_id' | 'invalid_range';
+  type: 'orphaned_highlight' | 'orphaned_comment' | 'missing_id' | 'duplicate_id' | 'invalid_range' | 'out_of_bounds';
   message: string;
   id?: string;
 }
@@ -10,9 +10,15 @@ export interface ValidationError {
  * Validate the integrity of parsed markover metadata.
  * Returns an array of validation errors (empty = valid).
  */
-export function validateMetadata(metadata: MarkovMetadata): ValidationError[] {
+export function validateMetadata(metadata: MarkovMetadata, docLength?: number): ValidationError[] {
   const errors: ValidationError[] = [];
   const allIds = new Set<string>();
+
+  // Only run orphan cross-checks when highlights are tracked as offset records.
+  // The parser does NOT populate metadata.highlights — highlights live as inline
+  // <span data-markov="hl"> markers in the markdown — so when highlights is empty
+  // we skip the orphaned_highlight / orphaned_comment checks to avoid false positives.
+  const trackHighlights = metadata.highlights.length > 0;
 
   // Check for duplicate IDs across all types
   const checkDuplicateId = (id: string, context: string) => {
@@ -30,7 +36,7 @@ export function validateMetadata(metadata: MarkovMetadata): ValidationError[] {
   const commentIds = new Set(metadata.comments.map((c) => c.id));
   for (const hl of metadata.highlights) {
     checkDuplicateId(hl.id, 'highlight');
-    if (!commentIds.has(hl.id)) {
+    if (trackHighlights && !commentIds.has(hl.id)) {
       errors.push({
         type: 'orphaned_highlight',
         message: `Highlight "${hl.id}" has no matching comment`,
@@ -44,13 +50,16 @@ export function validateMetadata(metadata: MarkovMetadata): ValidationError[] {
         id: hl.id,
       });
     }
+    if (docLength !== undefined && (hl.endOffset > docLength || hl.startOffset < 0)) {
+      errors.push({ type: 'out_of_bounds', message: `Highlight "${hl.id}" offset out of bounds`, id: hl.id });
+    }
   }
 
   // Validate comments have matching highlights
   const highlightIds = new Set(metadata.highlights.map((h) => h.id));
   for (const comment of metadata.comments) {
     // Comments reuse highlight IDs, so don't check duplicate here
-    if (!highlightIds.has(comment.id)) {
+    if (trackHighlights && !highlightIds.has(comment.id)) {
       errors.push({
         type: 'orphaned_comment',
         message: `Comment "${comment.id}" has no matching highlight`,
@@ -74,6 +83,9 @@ export function validateMetadata(metadata: MarkovMetadata): ValidationError[] {
         id: ins.id,
       });
     }
+    if (docLength !== undefined && (ins.endOffset > docLength || ins.startOffset < 0)) {
+      errors.push({ type: 'out_of_bounds', message: `Insertion "${ins.id}" offset out of bounds`, id: ins.id });
+    }
   }
 
   // Validate deletions
@@ -85,6 +97,9 @@ export function validateMetadata(metadata: MarkovMetadata): ValidationError[] {
         message: `Deletion "${del.id}" has start > end`,
         id: del.id,
       });
+    }
+    if (docLength !== undefined && (del.endOffset > docLength || del.startOffset < 0)) {
+      errors.push({ type: 'out_of_bounds', message: `Deletion "${del.id}" offset out of bounds`, id: del.id });
     }
   }
 

@@ -13,7 +13,7 @@ const config: ForgeConfig = {
     asar: true,
     name: 'Markover',
     executableName: 'Markover',
-    appVersion: '1.0.11',
+    appVersion: '1.1.0',
     appCopyright: `Copyright © ${new Date().getFullYear()} Peter Williams`,
   },
   publishers: [

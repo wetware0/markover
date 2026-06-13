@@ -8,7 +8,7 @@ const md = new MarkdownIt({
   typographer: false,
   breaks: false,
 })
-  .use(taskLists, { enabled: true, label: true, labelAfter: true })
+  .use(taskLists, { enabled: true })
   .use(footnotePlugin);
 
 // Allow data: image URIs (SVG icons, base64-embedded images, etc.)
@@ -58,6 +58,82 @@ md.core.ruler.after('inline', 'recover_malformed_strong_with_boundary_space', (s
     flushText();
 
     token.children = children;
+  }
+});
+
+// markdown-it-task-lists tags task list tokens (class "contains-task-list" on the
+// <ul>, class "task-list-item enabled" on each <li>) and injects an html_inline
+// checkbox token as the first child of the item's inline content. TipTap's
+// TaskList/TaskItem extensions instead want <ul data-type="taskList"> and
+// <li data-type="taskItem" data-checked="true|false"><p>…</p></li>.
+// Rewrite the token stream (not the rendered HTML) so nested and loose task lists
+// — which the old regex approach mangled — convert correctly.
+//
+// Looseness is detected at parse time (before we un-hide paragraph tokens) by
+// scanning the token range for this list and checking whether any paragraph_open
+// at the direct item level (not inside a nested sub-list) has hidden === false.
+// markdown-it sets hidden=true on paragraph tokens inside tight lists and
+// hidden=false for loose lists, so this is authoritative.
+md.core.ruler.after('github-task-lists', 'markover_task_items', (state) => {
+  const tokens = state.tokens;
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+
+    if (tok.type === 'bullet_list_open' && /\bcontains-task-list\b/.test(tok.attrGet('class') || '')) {
+      // Determine whether this task list is loose BEFORE un-hiding paragraph
+      // tokens below. Scan from here to the matching bullet_list_close, tracking
+      // nesting depth. A paragraph_open seen at depth 1 (directly inside this
+      // list's own list_item_open tokens, not inside a nested sub-list) with
+      // hidden === false indicates a loose list.
+      let listDepth = 0;
+      let isLoose = false;
+      for (let j = i; j < tokens.length; j++) {
+        const t = tokens[j];
+        if (t.type === 'bullet_list_open' || t.type === 'ordered_list_open') listDepth++;
+        if (t.type === 'bullet_list_close' || t.type === 'ordered_list_close') {
+          listDepth--;
+          if (listDepth === 0) break; // reached the end of this list
+        }
+        // Only look at paragraph_open tokens directly inside this list (depth 1)
+        if (listDepth === 1 && t.type === 'paragraph_open' && t.hidden === false) {
+          isLoose = true;
+          break;
+        }
+      }
+
+      tok.attrSet('data-type', 'taskList');
+      if (isLoose) tok.attrSet('data-loose', 'true');
+      continue;
+    }
+
+    if (tok.type === 'list_item_open' && /\btask-list-item\b/.test(tok.attrGet('class') || '')) {
+      // The structure is: list_item_open [i], paragraph_open [i+1], inline [i+2], paragraph_close [i+3]
+      const paraOpen = tokens[i + 1];
+      const inline = tokens[i + 2];
+      let checked = false;
+
+      if (inline && inline.type === 'inline' && inline.children && inline.children.length) {
+        const first = inline.children[0];
+        if (first.type === 'html_inline' && /task-list-item-checkbox/.test(first.content)) {
+          checked = /\bchecked\b/.test(first.content);
+          inline.children.shift(); // drop the raw <input> token
+          // The plugin leaves a single leading space after the checkbox marker.
+          const nextChild = inline.children[0];
+          if (nextChild && nextChild.type === 'text') {
+            nextChild.content = nextChild.content.replace(/^\s/, '');
+          }
+        }
+      }
+
+      tok.attrSet('data-type', 'taskItem');
+      tok.attrSet('data-checked', checked ? 'true' : 'false');
+
+      // Tight lists hide the wrapping <p>; force a real paragraph so TipTap sees
+      // block content inside the task item.
+      const paraClose = tokens[i + 3];
+      if (paraOpen && paraOpen.type === 'paragraph_open') paraOpen.hidden = false;
+      if (paraClose && paraClose.type === 'paragraph_close') paraClose.hidden = false;
+    }
   }
 });
 
@@ -139,19 +215,6 @@ export function markdownToHtml(markdown: string): string {
   }
 
   html += md.render(body);
-
-  // markdown-it-task-lists emits <ul class="contains-task-list"><li class="task-list-item">
-  // <input class="task-list-item-checkbox"[ checked]> <label>...</label></li></ul>.
-  // TipTap's TaskList/TaskItem extensions look for data-type attributes and
-  // data-checked instead, so translate.
-  html = html.replace(/<ul class="contains-task-list">/g, '<ul data-type="taskList">');
-  html = html.replace(
-    /<li class="task-list-item[^"]*">\s*<input class="task-list-item-checkbox"([^>]*)>\s*<label[^>]*>([\s\S]*?)<\/label>\s*<\/li>/g,
-    (_, inputAttrs: string, labelContent: string) => {
-      const checked = /\bchecked\b/.test(inputAttrs) ? 'true' : 'false';
-      return `<li data-type="taskItem" data-checked="${checked}"><p>${labelContent.trim()}</p></li>`;
-    },
-  );
 
   // markdown-it-footnote emits:
   //   <hr class="footnotes-sep">

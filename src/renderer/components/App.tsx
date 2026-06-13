@@ -3,7 +3,7 @@ import { EditorContent } from '@tiptap/react';
 import { nanoid } from 'nanoid';
 import { useMarkoverEditor } from '../editor/use-editor';
 import { useEditorStore } from '../store/editor-store';
-import { parseMarkoverFile } from '../../shared/markover-codec';
+import { parseMarkoverFile, validateMetadata } from '../../shared/markover-codec';
 import { useUserStore, getAuthorName } from '../store/user-store';
 import { UserSettingsDialog } from '../ui/UserSettingsDialog';
 import { useCommentsStore } from '../collaboration/comments/comment-store';
@@ -25,7 +25,16 @@ import { MermaidEditDialog } from '../ui/dialogs/MermaidEditDialog';
 import { ImageEditDialog } from '../ui/dialogs/ImageEditDialog';
 import { ImageDropDialog } from '../ui/dialogs/ImageDropDialog';
 import { TableContextBar } from '../ui/table/TableContextBar';
+import { ToastHost } from '../ui/toast/ToastHost';
+import { toast } from '../ui/toast/toast-store';
 import { MessageSquare, GitCompare, X } from 'lucide-react';
+import { useGitHubStore, type GitHubSource, type ReviewSession } from '../github/github-store';
+import { GitHubSignInDialog } from '../github/GitHubSignInDialog';
+import { OpenFromGitHubDialog } from '../github/OpenFromGitHubDialog';
+import { SaveToGitHubDialog } from '../github/SaveToGitHubDialog';
+import { ReviewPullRequestDialog } from '../github/ReviewPullRequestDialog';
+import { ReviewBanner } from '../github/ReviewBanner';
+import { isProtectedOrForbidden, offerWriteFallback, notifyWriteFailed } from '../github/github-write-fallback';
 
 type SidebarTab = 'comments' | 'changes';
 
@@ -46,7 +55,7 @@ interface PendingImageDrop {
 
 export function App() {
   const { editor, loadContent, getMarkdown, getMetadata, setMetadata } = useMarkoverEditor();
-  const { filePath, isDirty, setFile, setDirty, isRawMode, setRawMode } = useEditorStore();
+  const { filePath, isDirty, setFile, setDirty, isRawMode, setRawMode, fileName } = useEditorStore();
   const { setComments, comments, addComment, deleteComment: removeComment } = useCommentsStore();
   const { enabled: trackChangesEnabled, setEnabled: setTrackChangesEnabled, changes, setChanges, removeChange } = useTrackChangesStore();
   const { resolved: resolvedTheme } = useThemeStore();
@@ -66,6 +75,14 @@ export function App() {
   const findReplaceStore = useFindReplaceStore();
   // Pending action waiting for "unsaved changes" confirmation
   const [discardConfirm, setDiscardConfirm] = useState<{ message: string; onProceed: () => void } | null>(null);
+  const [githubSignInOpen, setGithubSignInOpen] = useState(false);
+  const [githubOpenOpen, setGithubOpenOpen] = useState(false);
+  const [githubSaveOpen, setGithubSaveOpen] = useState(false);
+  const githubSource = useGitHubStore((s) => s.source);
+  const setGithubSource = useGitHubStore((s) => s.setSource);
+  const githubLogin = useGitHubStore((s) => s.login);
+  const reviewMode = useGitHubStore((s) => s.reviewMode);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
 
   // Node edit state (KaTeX / Mermaid click-to-edit dialogs)
   type NodeEdit =
@@ -79,6 +96,35 @@ export function App() {
     const handler = (e: KeyboardEvent) => { if (e.key === 'F1') { e.preventDefault(); setHelpOpen(true); } };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Warn (throttled) when the track-changes plugin can't cleanly track a
+  // structural edit and lets it through untracked.
+  useEffect(() => {
+    let last = 0;
+    const handler = () => {
+      const now = performance.now();
+      if (now - last < 4000) return;
+      last = now;
+      toast.info('A structural edit could not be tracked and was applied directly.');
+    };
+    document.addEventListener('markover:untracked-edit', handler);
+    return () => document.removeEventListener('markover:untracked-edit', handler);
+  }, []);
+
+  // Keep the window title + native menu in sync with the open document and
+  // GitHub sign-in state (main composes the title and toggles the menu).
+  useEffect(() => {
+    window.electronAPI.notifySessionState(fileName || 'Untitled', githubLogin);
+  }, [fileName, githubLogin]);
+
+  // Restore the GitHub session on startup: the token is persisted (encrypted)
+  // in the main process, so if it's still valid, reflect the paired account in
+  // the title and menu without making the user sign in again.
+  useEffect(() => {
+    window.electronAPI.githubGetUser()
+      .then((user) => { if (user?.login) useGitHubStore.getState().setLogin(user.login); })
+      .catch(() => { /* no/invalid token — stay signed out */ });
   }, []);
 
   // Seed author name from OS login on first launch (only if no name persisted)
@@ -172,6 +218,34 @@ export function App() {
   }, [isRawMode, getMarkdown, loadContent, getMetadata, setComments, setRawMode, syncCommentsToMetadata, editor, findReplaceStore]);
 
   const handleSave = useCallback(async () => {
+    if (useGitHubStore.getState().reviewMode) return;
+    if (githubSource) {
+      let ghContent: string;
+      if (isRawMode) ghContent = rawContentRef.current;
+      else { syncCommentsToMetadata(); ghContent = getMarkdown(); }
+      try {
+        const { sha } = await window.electronAPI.githubPutFile(
+          githubSource.owner, githubSource.repo, githubSource.path,
+          ghContent, `Edited ${githubSource.path} in Markover`, githubSource.branch, githubSource.sha,
+        );
+        setGithubSource({ ...githubSource, sha });
+        setDirty(false);
+        toast.success('Saved to GitHub');
+      } catch (e) {
+        if (isProtectedOrForbidden(e)) {
+          const choice = offerWriteFallback(`${githubSource.owner}/${githubSource.repo}`, githubSource.branch);
+          if (choice.action === 'choose-branch') {
+            setGithubSaveOpen(true);
+          } else if (choice.action === 'save-local') {
+            setGithubSource(null);
+            await handleSaveAs();
+          }
+        } else {
+          notifyWriteFailed(e);
+        }
+      }
+      return;
+    }
     let content: string;
     if (isRawMode) {
       content = rawContentRef.current;
@@ -181,15 +255,33 @@ export function App() {
     }
     if (filePath) {
       const result = await window.electronAPI.saveFile(filePath, content);
-      if (result.success) setDirty(false);
+      if (result.success) {
+        setDirty(false);
+        toast.success('Saved');
+      } else if (result.conflict) {
+        const overwrite = window.confirm(
+          'This file changed on disk since you opened it (it may have synced from another device). ' +
+          'Overwrite the version on disk with your changes?',
+        );
+        if (overwrite) {
+          const forced = await window.electronAPI.saveFile(filePath, content, true);
+          if (forced.success) { setDirty(false); toast.success('Saved (overwrote disk version)'); }
+          else toast.error(`Save failed: ${forced.error ?? 'unknown error'}`);
+        }
+      } else {
+        toast.error(`Save failed: ${result.error ?? 'unknown error'}`);
+      }
     } else {
       const result = await window.electronAPI.saveFileAs(content);
-      if (result) {
+      if (result && result.success) {
         setFile(result.filePath, result.filePath.split(/[\\/]/).pop() || 'Untitled');
         setDirty(false);
+        toast.success('Saved');
+      } else if (result && result.error) {
+        toast.error(`Save failed: ${result.error}`);
       }
     }
-  }, [filePath, isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata]);
+  }, [filePath, isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata, githubSource, setGithubSource, setGithubSaveOpen]);
 
   const handleSaveAs = useCallback(async () => {
     let content: string;
@@ -200,9 +292,12 @@ export function App() {
       content = getMarkdown();
     }
     const result = await window.electronAPI.saveFileAs(content);
-    if (result) {
+    if (result && result.success) {
       setFile(result.filePath, result.filePath.split(/[\\/]/).pop() || 'Untitled');
       setDirty(false);
+      toast.success('Saved');
+    } else if (result && result.error) {
+      toast.error(`Save failed: ${result.error}`);
     }
   }, [isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata]);
 
@@ -235,6 +330,7 @@ export function App() {
     if (isRawMode) { rawContentRef.current = ''; setRawMode(false); }
     loadContent('');
     setFile(null, 'Untitled');
+    setGithubSource(null);
     setComments([]);
     setChanges([]);
     editor?.commands.clearSearch();
@@ -244,7 +340,7 @@ export function App() {
         editor?.commands.setSearchQuery(findReplaceStore.query, findReplaceStore.options);
       }, 50);
     }
-  }, [isRawMode, loadContent, setFile, setComments, setChanges, setRawMode, editor, findReplaceStore]);
+  }, [isRawMode, loadContent, setFile, setGithubSource, setComments, setChanges, setRawMode, editor, findReplaceStore]);
 
   const handleNew = useCallback(() => {
     guardDirty('You have unsaved changes. Create a new document anyway?', doNew);
@@ -533,6 +629,49 @@ export function App() {
     }
   }, []);
 
+  // Load a document fetched from GitHub. It lives on GitHub, not on local disk,
+  // so the local file path is cleared and the GitHub source is recorded for Save.
+  const loadFromGitHub = useCallback((source: GitHubSource, content: string, fileName: string) => {
+    const doLoad = () => {
+      setRawMode(false);
+      rawContentRef.current = '';
+      loadContent(content);
+      setFile(null, fileName);
+      setGithubSource(source);
+      const meta = getMetadata();
+      setComments(meta.comments);
+      applyCspellIgnores(meta);
+      setDirty(false);
+      editor?.commands.clearSearch();
+      findReplaceStore.clearMatchState();
+    };
+    guardDirty(`You have unsaved changes. Open "${fileName}" anyway?`, doLoad);
+  }, [setRawMode, loadContent, setFile, setGithubSource, getMetadata, setComments, applyCspellIgnores, setDirty, editor, findReplaceStore, guardDirty]);
+
+  const enterReview = useCallback((session: ReviewSession, tracked: string) => {
+    const doEnter = () => {
+      setRawMode(false);
+      rawContentRef.current = '';
+      loadContent(tracked);
+      setFile(null, session.path.split('/').pop() || session.path);
+      setGithubSource(null);
+      useGitHubStore.getState().setReviewSession(session);
+      useGitHubStore.getState().setReviewMode(true);
+      editor?.setEditable(false);
+      setDirty(false);
+      setComments(getMetadata().comments);
+    };
+    guardDirty('You have unsaved changes. Review this pull request anyway?', doEnter);
+  }, [setRawMode, loadContent, setFile, setGithubSource, editor, setDirty, setComments, getMetadata, guardDirty]);
+
+  const exitReview = useCallback(() => {
+    useGitHubStore.getState().setReviewMode(false);
+    useGitHubStore.getState().setReviewSession(null);
+    editor?.setEditable(true);
+    loadContent('');
+    setFile(null, 'Untitled');
+  }, [editor, loadContent, setFile]);
+
   // Handle file opened from main process (recent files, CLI arg, drag-drop)
   useEffect(() => {
     const unsubscribe = window.electronAPI.onFileChanged((data) => {
@@ -541,7 +680,17 @@ export function App() {
         rawContentRef.current = '';
         loadContent(data.content);
         setFile(data.filePath, data.fileName);
+        setGithubSource(null);
         const meta = getMetadata();
+        const { cleanMarkdown } = parseMarkoverFile(data.content);
+        const structuralProblems = validateMetadata(meta, cleanMarkdown.length).length;
+        const danglingComments = meta.comments.filter(
+          (c) => !data.content.includes(`data-comment-id="${c.id}"`),
+        ).length;
+        const problemCount = structuralProblems + danglingComments;
+        if (problemCount > 0) {
+          toast.error(`This file's collaboration data had ${problemCount} issue(s) and may display incompletely.`);
+        }
         setComments(meta.comments);
         applyCspellIgnores(meta);
         editor?.commands.clearSearch();
@@ -555,7 +704,7 @@ export function App() {
       guardDirty(`You have unsaved changes. Open "${data.fileName}" anyway?`, doLoad);
     });
     return unsubscribe;
-  }, [loadContent, setFile, getMetadata, setComments, setRawMode, applyCspellIgnores, guardDirty]);
+  }, [loadContent, setFile, setGithubSource, getMetadata, setComments, setRawMode, applyCspellIgnores, guardDirty]);
 
   // Handle menu actions
   useEffect(() => {
@@ -570,7 +719,17 @@ export function App() {
               rawContentRef.current = '';
               loadContent(data.content);
               setFile(data.filePath, data.fileName);
+              setGithubSource(null);
               const meta = getMetadata();
+              const { cleanMarkdown } = parseMarkoverFile(data.content);
+              const structuralProblems = validateMetadata(meta, cleanMarkdown.length).length;
+              const danglingComments = meta.comments.filter(
+                (c) => !data.content.includes(`data-comment-id="${c.id}"`),
+              ).length;
+              const problemCount = structuralProblems + danglingComments;
+              if (problemCount > 0) {
+                toast.error(`This file's collaboration data had ${problemCount} issue(s) and may display incompletely.`);
+              }
               setComments(meta.comments);
               applyCspellIgnores(meta);
               editor?.commands.clearSearch();
@@ -631,6 +790,20 @@ export function App() {
         case 'publish': handlePublish(); break;
         case 'help': setHelpOpen(true); break;
         case 'about': setAboutOpen(true); break;
+        case 'github-sign-in': setGithubSignInOpen(true); break;
+        case 'github-open': setGithubOpenOpen(true); break;
+        case 'github-save-as': if (useGitHubStore.getState().login) setGithubSaveOpen(true); else toast.info('Sign in to GitHub first.'); break;
+        case 'github-review': if (useGitHubStore.getState().login) setReviewDialogOpen(true); else toast.info('Sign in to GitHub first.'); break;
+        case 'github-sign-out': {
+          const proceed = !isDirty || window.confirm('You have unsaved changes. Sign out of GitHub anyway?');
+          if (proceed) {
+            await window.electronAPI.githubSignOut();
+            useGitHubStore.getState().setLogin(null);
+            setGithubSource(null);
+            toast.info('Signed out of GitHub.');
+          }
+          break;
+        }
         default:
           if (action.startsWith('cspell-ignore:')) {
             const word = action.slice('cspell-ignore:'.length);
@@ -655,7 +828,7 @@ export function App() {
       }
     });
     return unsubscribe;
-  }, [editor, isRawMode, handleNew, handleSave, handleSaveAs, handlePublish, handleToggleRawMode, handleAddComment, trackChangesEnabled, setTrackChangesEnabled]);
+  }, [editor, isRawMode, isDirty, handleNew, handleSave, handleSaveAs, handlePublish, handleToggleRawMode, handleAddComment, trackChangesEnabled, setTrackChangesEnabled, setGithubSource]);
 
   return (
     <div className="flex flex-col h-screen print:h-auto print:overflow-visible bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -690,6 +863,7 @@ export function App() {
           </div>
         ) : (
         <div className="flex-1 overflow-y-auto print:overflow-visible bg-white dark:bg-gray-900" onClick={handleEditorClick}>
+          {reviewMode && <ReviewBanner onDone={exitReview} />}
           <div className="mx-auto" style={{ fontSize: `${zoomLevel}%`, maxWidth: `${56 * zoomLevel / 100}rem` }}>
             <EditorContent editor={editor} className="min-h-full" />
           </div>
@@ -878,6 +1052,23 @@ export function App() {
           </div>
         </div>
       )}
+
+      <GitHubSignInDialog open={githubSignInOpen} onClose={() => setGithubSignInOpen(false)} />
+      <OpenFromGitHubDialog
+        open={githubOpenOpen}
+        onClose={() => setGithubOpenOpen(false)}
+        onOpened={loadFromGitHub}
+      />
+      <SaveToGitHubDialog
+        open={githubSaveOpen}
+        onClose={() => setGithubSaveOpen(false)}
+        initialFileName={fileName && fileName !== 'Untitled' ? fileName : 'untitled.md'}
+        getContent={() => { if (isRawMode) return rawContentRef.current; syncCommentsToMetadata(); return getMarkdown(); }}
+        onSaved={(_src, name) => { setFile(null, name); setDirty(false); }}
+      />
+      <ReviewPullRequestDialog open={reviewDialogOpen} onClose={() => setReviewDialogOpen(false)} onReview={enterReview} />
+
+      <ToastHost />
     </div>
   );
 }

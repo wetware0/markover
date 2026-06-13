@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, session, protocol, net, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import os from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -24,8 +25,24 @@ async function getGitRoot(dir: string): Promise<string | null> {
   }
 }
 
+// Write atomically: a same-directory temp file is fsynced then renamed over the
+// target, so a crash mid-write can never truncate the user's document.
+async function atomicWrite(filePath: string, data: string | Uint8Array): Promise<void> {
+  const dir = path.dirname(filePath);
+  const tmp = path.join(dir, `.${path.basename(filePath)}.${randomBytes(6).toString('hex')}.tmp`);
+  const handle = await fs.open(tmp, 'w');
+  try {
+    await handle.writeFile(data);
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  await fs.rename(tmp, filePath);
+}
+
 import { IPC_CHANNELS } from '../shared/types/ipc';
 import { buildMenu } from './menu';
+import { registerGitHubHandlers } from './github/ipc';
 
 // Must be called before app.ready
 protocol.registerSchemesAsPrivileged([
@@ -53,6 +70,9 @@ if (app.isPackaged && !IS_E2E_TEST) {
 
 let mainWindow: BrowserWindow | null = null;
 let currentFilePath: string | null = null;
+let lastKnownMtimeMs: number | null = null;
+let sessionDocumentName = 'Untitled';
+let githubLogin: string | null = null;
 let recentFiles: string[] = [];
 
 const RECENT_PATH = path.join(app.getPath('userData'), 'recent-files.json');
@@ -95,13 +115,13 @@ async function addRecentFile(filePath: string): Promise<void> {
 
 function updateTitle() {
   if (!mainWindow) return;
-  const fileName = currentFilePath ? path.basename(currentFilePath) : 'Untitled';
-  mainWindow.setTitle(`${fileName} — Markover`);
+  const base = `${sessionDocumentName} — Markover`;
+  mainWindow.setTitle(githubLogin ? `${base} · GitHub: ${githubLogin}` : base);
 }
 
 function rebuildMenu() {
   if (!mainWindow) return;
-  Menu.setApplicationMenu(buildMenu(mainWindow, recentFiles, openFileByPath));
+  Menu.setApplicationMenu(buildMenu(mainWindow, recentFiles, openFileByPath, githubLogin));
 }
 
 // --- Open a file (used by menu and CLI) ---
@@ -110,6 +130,7 @@ async function openFileByPath(filePath: string): Promise<void> {
   if (!mainWindow) return;
   try {
     const content = await fs.readFile(filePath, 'utf-8');
+    lastKnownMtimeMs = (await fs.stat(filePath)).mtimeMs;
     currentFilePath = filePath;
     updateTitle();
     await addRecentFile(filePath);
@@ -271,6 +292,7 @@ ipcMain.handle(IPC_CHANNELS.FILE_OPEN, async () => {
 
   const filePath = result.filePaths[0];
   const content = await fs.readFile(filePath, 'utf-8');
+  lastKnownMtimeMs = (await fs.stat(filePath)).mtimeMs;
   currentFilePath = filePath;
   updateTitle();
   await addRecentFile(filePath);
@@ -282,15 +304,22 @@ ipcMain.handle(IPC_CHANNELS.FILE_OPEN, async () => {
   };
 });
 
-ipcMain.handle(IPC_CHANNELS.FILE_SAVE, async (_event, filePath: string, content: string) => {
+ipcMain.handle(IPC_CHANNELS.FILE_SAVE, async (_event, filePath: string, content: string, force = false) => {
   try {
-    await fs.writeFile(filePath, content, 'utf-8');
+    if (!force && isSamePath(filePath, currentFilePath || '') && lastKnownMtimeMs !== null) {
+      const onDisk = await fs.stat(filePath).then((s) => s.mtimeMs).catch(() => null);
+      if (onDisk !== null && onDisk > lastKnownMtimeMs + 1) {
+        return { success: false, filePath, conflict: true };
+      }
+    }
+    await atomicWrite(filePath, content);
+    lastKnownMtimeMs = (await fs.stat(filePath)).mtimeMs;
     currentFilePath = filePath;
     updateTitle();
     await addRecentFile(filePath);
     return { success: true, filePath };
-  } catch {
-    return { success: false, filePath };
+  } catch (err) {
+    return { success: false, filePath, error: (err as Error).message };
   }
 });
 
@@ -308,13 +337,14 @@ ipcMain.handle(IPC_CHANNELS.FILE_SAVE_AS, async (_event, content: string) => {
   if (result.canceled || !result.filePath) return null;
 
   try {
-    await fs.writeFile(result.filePath, content, 'utf-8');
+    await atomicWrite(result.filePath, content);
+    lastKnownMtimeMs = (await fs.stat(result.filePath)).mtimeMs;
     currentFilePath = result.filePath;
     updateTitle();
     await addRecentFile(result.filePath);
     return { success: true, filePath: result.filePath };
-  } catch {
-    return null;
+  } catch (err) {
+    return { success: false, filePath: result.filePath, error: (err as Error).message };
   }
 });
 
@@ -341,7 +371,7 @@ ipcMain.handle(IPC_CHANNELS.EXPORT_PDF, async () => {
       printBackground: true,
       margins: { marginType: 'default' },
     });
-    await fs.writeFile(result.filePath, pdfData);
+    await atomicWrite(result.filePath, pdfData);
     return { success: true, filePath: result.filePath };
   } catch {
     return { success: false };
@@ -364,6 +394,14 @@ ipcMain.handle(IPC_CHANNELS.SPELLCHECK_SET_LANGUAGES, (_event, languages: string
 
 ipcMain.handle(IPC_CHANNELS.SPELLCHECK_ADD_WORD, (_event, word: string) => {
   session.defaultSession.addWordToSpellCheckerDictionary(word);
+});
+
+ipcMain.on(IPC_CHANNELS.SESSION_STATE, (_event, documentName: string, login: string | null) => {
+  const loginChanged = githubLogin !== login;
+  sessionDocumentName = documentName || 'Untitled';
+  githubLogin = login;
+  updateTitle();
+  if (loginChanged) rebuildMenu();
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_OS_USERNAME, () => {
@@ -392,7 +430,7 @@ ipcMain.handle(IPC_CHANNELS.PATH_RELATIVE, (_event, fromDir: string, toPath: str
   return rel.replace(/\\/g, '/');
 });
 
-ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, (_event, target: string) => {
+ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, async (_event, target: string) => {
   if (/^https?:\/\//i.test(target)) {
     void shell.openExternal(target);
     return;
@@ -411,8 +449,29 @@ ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, (_event, target: string) => {
     absolutePath = path.join(path.dirname(currentFilePath), target);
   }
 
+  const EXECUTABLE_RE = /\.(exe|bat|cmd|com|scr|ps1|msi|vbs|js|jar|app|sh)$/i;
+  if (EXECUTABLE_RE.test(absolutePath)) {
+    const { response } = await dialog.showMessageBox(mainWindow!, {
+      type: 'warning',
+      buttons: ['Open', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      message: 'Open an executable file?',
+      detail: `This will run:\n${absolutePath}\n\nOnly continue if you trust this document.`,
+    });
+    if (response !== 0) return;
+  }
   void shell.openPath(absolutePath);
 });
+
+// True if `candidate` is inside `root` (after normalisation). Prevents the
+// asset protocol from serving files outside the document's directory tree.
+function isPathInside(candidate: string, root: string): boolean {
+  const rel = path.relative(root, candidate);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+registerGitHubHandlers();
 
 app.on('ready', () => {
   protocol.handle('markover-asset', async (request) => {
@@ -456,6 +515,17 @@ app.on('ready', () => {
       // Relative path — resolve against directory of the open file
       if (!currentFilePath) return new Response('No file is open', { status: 404 });
       absolutePath = path.join(path.dirname(currentFilePath), rawSrc).replace(/\\/g, '/');
+    }
+
+    // Containment: only serve assets within the open document's directory or its
+    // git root. Without an open file there is no legitimate asset to serve.
+    const docDir = currentFilePath ? path.dirname(currentFilePath) : null;
+    if (!docDir) return new Response('No file is open', { status: 404 });
+    const gitRoot = await getGitRoot(docDir);
+    const allowedRoots = [docDir.replace(/\\/g, '/'), gitRoot?.replace(/\\/g, '/')].filter(Boolean) as string[];
+    const normalised = path.resolve(absolutePath).replace(/\\/g, '/');
+    if (!allowedRoots.some((root) => isPathInside(normalised, root))) {
+      return new Response('Asset outside document directory', { status: 403 });
     }
 
     const fileUrl = process.platform === 'win32'

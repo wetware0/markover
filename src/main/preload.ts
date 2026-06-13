@@ -6,8 +6,8 @@ const api: ElectronAPI = {
   getRelativePath: (fromDir: string, toPath: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.PATH_RELATIVE, fromDir, toPath),
   openFile: () => ipcRenderer.invoke(IPC_CHANNELS.FILE_OPEN),
-  saveFile: (filePath: string, content: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.FILE_SAVE, filePath, content),
+  saveFile: (filePath: string, content: string, force?: boolean) =>
+    ipcRenderer.invoke(IPC_CHANNELS.FILE_SAVE, filePath, content, force),
   saveFileAs: (content: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.FILE_SAVE_AS, content),
   newFile: () => ipcRenderer.invoke(IPC_CHANNELS.FILE_NEW),
@@ -32,6 +32,27 @@ const api: ElectronAPI = {
   getOsUsername: () => ipcRenderer.invoke(IPC_CHANNELS.GET_OS_USERNAME),
   openPath: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.SHELL_OPEN_PATH, filePath),
   openFilePath: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.FILE_OPEN_PATH, filePath),
+  githubStartAuth: () => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_START_AUTH),
+  githubPollAuth: (deviceCode: string, interval: number, expiresIn: number) =>
+    ipcRenderer.invoke(IPC_CHANNELS.GITHUB_POLL_AUTH, deviceCode, interval, expiresIn),
+  githubSignOut: () => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_SIGN_OUT),
+  githubGetUser: () => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_GET_USER),
+  githubListRepos: () => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_LIST_REPOS),
+  githubListContents: (owner: string, repo: string, dirPath: string, ref?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.GITHUB_LIST_CONTENTS, owner, repo, dirPath, ref),
+  githubGetFile: (owner: string, repo: string, filePath: string, ref?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.GITHUB_GET_FILE, owner, repo, filePath, ref),
+  githubPutFile: (owner: string, repo: string, filePath: string, content: string, message: string, branch: string, sha?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.GITHUB_PUT_FILE, owner, repo, filePath, content, message, branch, sha),
+  githubListBranches: (owner: string, repo: string) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_LIST_BRANCHES, owner, repo),
+  githubGetBranchSha: (owner: string, repo: string, branch: string) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_GET_BRANCH_SHA, owner, repo, branch),
+  githubCreateBranch: (owner: string, repo: string, newBranch: string, fromSha: string) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_CREATE_BRANCH, owner, repo, newBranch, fromSha),
+  githubListPullRequests: (owner: string, repo: string) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_LIST_PRS, owner, repo),
+  githubListPullRequestFiles: (owner: string, repo: string, num: number) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_LIST_PR_FILES, owner, repo, num),
+  githubGetPullRequest: (owner: string, repo: string, num: number) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_GET_PR, owner, repo, num),
+  githubSubmitReview: (owner: string, repo: string, num: number, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body: string) => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_SUBMIT_REVIEW, owner, repo, num, event, body),
+  notifySessionState: (documentName: string, githubLogin: string | null) =>
+    ipcRenderer.send(IPC_CHANNELS.SESSION_STATE, documentName, githubLogin),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);
