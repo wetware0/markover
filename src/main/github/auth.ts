@@ -1,7 +1,7 @@
 import { saveToken } from './token-store';
 
 // Set to the Client ID of the registered GitHub OAuth App (device flow enabled).
-export const GITHUB_CLIENT_ID = 'REPLACE_WITH_OAUTH_APP_CLIENT_ID';
+export const GITHUB_CLIENT_ID = 'Ov23lig2zUXLYnrLHbfu';
 const SCOPE = 'repo';
 
 export interface DeviceCode {
