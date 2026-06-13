@@ -17,8 +17,11 @@ npm test               # Playwright e2e suite (auto-builds a test-mode package)
 npx tsx scripts/roundtrip-test.ts   # Headless markdown roundtrip suite (no Electron)
 ```
 
-> **Note**: `npm install` requires `--legacy-peer-deps` due to a pre-existing conflict
-> between `@vitejs/plugin-react@6` (requires `vite@^8`) and the pinned `vite@^5.4.21`.
+> **Note**: `npm install` runs cleanly without flags. (The former `--legacy-peer-deps`
+> requirement came from an unused `@vitejs/plugin-react@6` devDependency, which pulled a
+> `vite@^8` peer against the pinned `vite@^5.4.21`; it and the unused `@tailwindcss/vite`
+> were removed — JSX is handled by `esbuild: { jsx: 'automatic' }` and Tailwind via
+> `postcss.config.js`.)
 
 ### Testing
 
