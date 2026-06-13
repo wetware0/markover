@@ -14,6 +14,12 @@ export function validateMetadata(metadata: MarkovMetadata, docLength?: number): 
   const errors: ValidationError[] = [];
   const allIds = new Set<string>();
 
+  // Only run orphan cross-checks when highlights are tracked as offset records.
+  // The parser does NOT populate metadata.highlights — highlights live as inline
+  // <span data-markov="hl"> markers in the markdown — so when highlights is empty
+  // we skip the orphaned_highlight / orphaned_comment checks to avoid false positives.
+  const trackHighlights = metadata.highlights.length > 0;
+
   // Check for duplicate IDs across all types
   const checkDuplicateId = (id: string, context: string) => {
     if (!id) {
@@ -30,7 +36,7 @@ export function validateMetadata(metadata: MarkovMetadata, docLength?: number): 
   const commentIds = new Set(metadata.comments.map((c) => c.id));
   for (const hl of metadata.highlights) {
     checkDuplicateId(hl.id, 'highlight');
-    if (!commentIds.has(hl.id)) {
+    if (trackHighlights && !commentIds.has(hl.id)) {
       errors.push({
         type: 'orphaned_highlight',
         message: `Highlight "${hl.id}" has no matching comment`,
@@ -53,7 +59,7 @@ export function validateMetadata(metadata: MarkovMetadata, docLength?: number): 
   const highlightIds = new Set(metadata.highlights.map((h) => h.id));
   for (const comment of metadata.comments) {
     // Comments reuse highlight IDs, so don't check duplicate here
-    if (!highlightIds.has(comment.id)) {
+    if (trackHighlights && !highlightIds.has(comment.id)) {
       errors.push({
         type: 'orphaned_comment',
         message: `Comment "${comment.id}" has no matching highlight`,

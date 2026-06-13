@@ -565,9 +565,14 @@ export function App() {
         loadContent(data.content);
         setFile(data.filePath, data.fileName);
         const meta = getMetadata();
-        const problems = validateMetadata(meta);
-        if (problems.length > 0) {
-          toast.error(`This file's collaboration data had ${problems.length} issue(s) and may display incompletely.`);
+        const { cleanMarkdown } = parseMarkoverFile(data.content);
+        const structuralProblems = validateMetadata(meta, cleanMarkdown.length).length;
+        const danglingComments = meta.comments.filter(
+          (c) => !data.content.includes(`data-comment-id="${c.id}"`),
+        ).length;
+        const problemCount = structuralProblems + danglingComments;
+        if (problemCount > 0) {
+          toast.error(`This file's collaboration data had ${problemCount} issue(s) and may display incompletely.`);
         }
         setComments(meta.comments);
         applyCspellIgnores(meta);
@@ -598,9 +603,14 @@ export function App() {
               loadContent(data.content);
               setFile(data.filePath, data.fileName);
               const meta = getMetadata();
-              const problems = validateMetadata(meta);
-              if (problems.length > 0) {
-                toast.error(`This file's collaboration data had ${problems.length} issue(s) and may display incompletely.`);
+              const { cleanMarkdown } = parseMarkoverFile(data.content);
+              const structuralProblems = validateMetadata(meta, cleanMarkdown.length).length;
+              const danglingComments = meta.comments.filter(
+                (c) => !data.content.includes(`data-comment-id="${c.id}"`),
+              ).length;
+              const problemCount = structuralProblems + danglingComments;
+              if (problemCount > 0) {
+                toast.error(`This file's collaboration data had ${problemCount} issue(s) and may display incompletely.`);
               }
               setComments(meta.comments);
               applyCspellIgnores(meta);
