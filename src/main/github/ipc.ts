@@ -17,4 +17,7 @@ export function registerGitHubHandlers(): void {
     api.getFile(owner, repo, filePath, ref));
   ipcMain.handle(IPC_CHANNELS.GITHUB_PUT_FILE, (_e, owner: string, repo: string, filePath: string, content: string, message: string, branch: string, sha?: string) =>
     api.putFile(owner, repo, filePath, content, message, branch, sha));
+  ipcMain.handle(IPC_CHANNELS.GITHUB_LIST_BRANCHES, (_e, owner: string, repo: string) => api.listBranches(owner, repo));
+  ipcMain.handle(IPC_CHANNELS.GITHUB_GET_BRANCH_SHA, (_e, owner: string, repo: string, branch: string) => api.getBranchHeadSha(owner, repo, branch));
+  ipcMain.handle(IPC_CHANNELS.GITHUB_CREATE_BRANCH, (_e, owner: string, repo: string, newBranch: string, fromSha: string) => api.createBranch(owner, repo, newBranch, fromSha));
 }

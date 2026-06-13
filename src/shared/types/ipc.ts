@@ -39,6 +39,9 @@ export const IPC_CHANNELS = {
   GITHUB_LIST_CONTENTS: 'github:list-contents',
   GITHUB_GET_FILE: 'github:get-file',
   GITHUB_PUT_FILE: 'github:put-file',
+  GITHUB_LIST_BRANCHES: 'github:list-branches',
+  GITHUB_GET_BRANCH_SHA: 'github:get-branch-sha',
+  GITHUB_CREATE_BRANCH: 'github:create-branch',
   SESSION_STATE: 'session:state',
 } as const;
 
@@ -70,6 +73,9 @@ export interface ElectronAPI {
   githubListContents: (owner: string, repo: string, dirPath: string, ref?: string) => Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>>;
   githubGetFile: (owner: string, repo: string, filePath: string, ref?: string) => Promise<{ content: string; sha: string }>;
   githubPutFile: (owner: string, repo: string, filePath: string, content: string, message: string, branch: string, sha?: string) => Promise<{ sha: string }>;
+  githubListBranches: (owner: string, repo: string) => Promise<Array<{ name: string; protected: boolean }>>;
+  githubGetBranchSha: (owner: string, repo: string, branch: string) => Promise<string>;
+  githubCreateBranch: (owner: string, repo: string, newBranch: string, fromSha: string) => Promise<void>;
   notifySessionState: (documentName: string, githubLogin: string | null) => void;
 }
 

@@ -48,6 +48,32 @@ export async function getFile(owner: string, repo: string, filePath: string, ref
   return { content, sha: data.sha };
 }
 
+export interface Branch { name: string; protected: boolean; }
+
+export async function listBranches(owner: string, repo: string): Promise<Branch[]> {
+  const res = await gh(`/repos/${owner}/${repo}/branches?per_page=100`);
+  if (!res.ok) throw new Error(`List branches failed (${res.status})`);
+  return (await res.json()) as Branch[];
+}
+
+export async function getBranchHeadSha(owner: string, repo: string, branch: string): Promise<string> {
+  const res = await gh(`/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(branch)}`);
+  if (!res.ok) throw new Error(`Get branch head failed (${res.status})`);
+  const data = (await res.json()) as { object: { sha: string } };
+  return data.object.sha;
+}
+
+export async function createBranch(owner: string, repo: string, newBranch: string, fromSha: string): Promise<void> {
+  const res = await gh(`/repos/${owner}/${repo}/git/refs`, {
+    method: 'POST',
+    body: JSON.stringify({ ref: `refs/heads/${newBranch}`, sha: fromSha }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Create branch failed (${res.status}): ${body}`);
+  }
+}
+
 // Commit a file via the Contents API. `sha` must be the current blob sha when updating.
 export async function putFile(
   owner: string, repo: string, filePath: string,
