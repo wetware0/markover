@@ -10,6 +10,7 @@
  * Reports per-case status with a unified diff when the output drifts.
  */
 
+import { toTrackedMarkdown } from '../src/renderer/github/pr-diff';
 import { JSDOM } from 'jsdom';
 
 // JSDOM must be installed before importing anything that touches prosemirror DOMParser
@@ -493,6 +494,22 @@ for (const c of serializationCases) {
     });
     console.log('  FAIL  codec literal-quote attribute round-trip');
   }
+}
+
+{
+  const base = 'Line one.\n\nLine two.\n';
+  const head = 'Line one.\n\nLine two changed.\n';
+  const out = toTrackedMarkdown(base, head, 'alice', '2026-01-01');
+  const ok = out.includes('data-markov="del"') && out.includes('data-markov="ins"') && out.includes('Line one.');
+  if (ok) { passed++; console.log('  PASS  pr-diff marks a changed block'); }
+  else { failed++; failures.push({ name: 'pr-diff marks a changed block', input: head, expected: 'ins+del around changed block, line one untouched', got: out }); console.log('  FAIL  pr-diff marks a changed block'); }
+}
+{
+  const same = 'No change.\n';
+  const out = toTrackedMarkdown(same, same, 'alice', '2026-01-01');
+  const ok = !out.includes('data-markov');
+  if (ok) { passed++; console.log('  PASS  pr-diff: identical input has no marks'); }
+  else { failed++; failures.push({ name: 'pr-diff identical', input: same, expected: 'no markers', got: out }); console.log('  FAIL  pr-diff: identical input has no marks'); }
 }
 
 console.log(`\n${passed} passed, ${failed} failed (${passed + failed} total)\n`);
