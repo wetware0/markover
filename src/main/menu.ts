@@ -42,6 +42,15 @@ export function buildMenu(
         },
         { type: 'separator' },
         {
+          label: 'Sign in to GitHub...',
+          click: () => sendAction('github-sign-in'),
+        },
+        {
+          label: 'Open from GitHub...',
+          click: () => sendAction('github-open'),
+        },
+        { type: 'separator' },
+        {
           label: 'Save',
           accelerator: 'CmdOrCtrl+S',
           click: () => sendAction('save'),

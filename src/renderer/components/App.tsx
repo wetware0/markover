@@ -28,6 +28,9 @@ import { TableContextBar } from '../ui/table/TableContextBar';
 import { ToastHost } from '../ui/toast/ToastHost';
 import { toast } from '../ui/toast/toast-store';
 import { MessageSquare, GitCompare, X } from 'lucide-react';
+import { useGitHubStore, type GitHubSource } from '../github/github-store';
+import { GitHubSignInDialog } from '../github/GitHubSignInDialog';
+import { OpenFromGitHubDialog } from '../github/OpenFromGitHubDialog';
 
 type SidebarTab = 'comments' | 'changes';
 
@@ -68,6 +71,10 @@ export function App() {
   const findReplaceStore = useFindReplaceStore();
   // Pending action waiting for "unsaved changes" confirmation
   const [discardConfirm, setDiscardConfirm] = useState<{ message: string; onProceed: () => void } | null>(null);
+  const [githubSignInOpen, setGithubSignInOpen] = useState(false);
+  const [githubOpenOpen, setGithubOpenOpen] = useState(false);
+  const githubSource = useGitHubStore((s) => s.source);
+  const setGithubSource = useGitHubStore((s) => s.setSource);
 
   // Node edit state (KaTeX / Mermaid click-to-edit dialogs)
   type NodeEdit =
@@ -272,6 +279,7 @@ export function App() {
     if (isRawMode) { rawContentRef.current = ''; setRawMode(false); }
     loadContent('');
     setFile(null, 'Untitled');
+    setGithubSource(null);
     setComments([]);
     setChanges([]);
     editor?.commands.clearSearch();
@@ -281,7 +289,7 @@ export function App() {
         editor?.commands.setSearchQuery(findReplaceStore.query, findReplaceStore.options);
       }, 50);
     }
-  }, [isRawMode, loadContent, setFile, setComments, setChanges, setRawMode, editor, findReplaceStore]);
+  }, [isRawMode, loadContent, setFile, setGithubSource, setComments, setChanges, setRawMode, editor, findReplaceStore]);
 
   const handleNew = useCallback(() => {
     guardDirty('You have unsaved changes. Create a new document anyway?', doNew);
@@ -570,6 +578,25 @@ export function App() {
     }
   }, []);
 
+  // Load a document fetched from GitHub. It lives on GitHub, not on local disk,
+  // so the local file path is cleared and the GitHub source is recorded for Save.
+  const loadFromGitHub = useCallback((source: GitHubSource, content: string, fileName: string) => {
+    const doLoad = () => {
+      setRawMode(false);
+      rawContentRef.current = '';
+      loadContent(content);
+      setFile(null, fileName);
+      setGithubSource(source);
+      const meta = getMetadata();
+      setComments(meta.comments);
+      applyCspellIgnores(meta);
+      setDirty(false);
+      editor?.commands.clearSearch();
+      findReplaceStore.clearMatchState();
+    };
+    guardDirty(`You have unsaved changes. Open "${fileName}" anyway?`, doLoad);
+  }, [setRawMode, loadContent, setFile, setGithubSource, getMetadata, setComments, applyCspellIgnores, setDirty, editor, findReplaceStore, guardDirty]);
+
   // Handle file opened from main process (recent files, CLI arg, drag-drop)
   useEffect(() => {
     const unsubscribe = window.electronAPI.onFileChanged((data) => {
@@ -578,6 +605,7 @@ export function App() {
         rawContentRef.current = '';
         loadContent(data.content);
         setFile(data.filePath, data.fileName);
+        setGithubSource(null);
         const meta = getMetadata();
         const { cleanMarkdown } = parseMarkoverFile(data.content);
         const structuralProblems = validateMetadata(meta, cleanMarkdown.length).length;
@@ -601,7 +629,7 @@ export function App() {
       guardDirty(`You have unsaved changes. Open "${data.fileName}" anyway?`, doLoad);
     });
     return unsubscribe;
-  }, [loadContent, setFile, getMetadata, setComments, setRawMode, applyCspellIgnores, guardDirty]);
+  }, [loadContent, setFile, setGithubSource, getMetadata, setComments, setRawMode, applyCspellIgnores, guardDirty]);
 
   // Handle menu actions
   useEffect(() => {
@@ -616,6 +644,7 @@ export function App() {
               rawContentRef.current = '';
               loadContent(data.content);
               setFile(data.filePath, data.fileName);
+              setGithubSource(null);
               const meta = getMetadata();
               const { cleanMarkdown } = parseMarkoverFile(data.content);
               const structuralProblems = validateMetadata(meta, cleanMarkdown.length).length;
@@ -686,6 +715,8 @@ export function App() {
         case 'publish': handlePublish(); break;
         case 'help': setHelpOpen(true); break;
         case 'about': setAboutOpen(true); break;
+        case 'github-sign-in': setGithubSignInOpen(true); break;
+        case 'github-open': setGithubOpenOpen(true); break;
         default:
           if (action.startsWith('cspell-ignore:')) {
             const word = action.slice('cspell-ignore:'.length);
@@ -710,7 +741,7 @@ export function App() {
       }
     });
     return unsubscribe;
-  }, [editor, isRawMode, handleNew, handleSave, handleSaveAs, handlePublish, handleToggleRawMode, handleAddComment, trackChangesEnabled, setTrackChangesEnabled]);
+  }, [editor, isRawMode, handleNew, handleSave, handleSaveAs, handlePublish, handleToggleRawMode, handleAddComment, trackChangesEnabled, setTrackChangesEnabled, setGithubSource]);
 
   return (
     <div className="flex flex-col h-screen print:h-auto print:overflow-visible bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -933,6 +964,13 @@ export function App() {
           </div>
         </div>
       )}
+
+      <GitHubSignInDialog open={githubSignInOpen} onClose={() => setGithubSignInOpen(false)} />
+      <OpenFromGitHubDialog
+        open={githubOpenOpen}
+        onClose={() => setGithubOpenOpen(false)}
+        onOpened={loadFromGitHub}
+      />
 
       <ToastHost />
     </div>
