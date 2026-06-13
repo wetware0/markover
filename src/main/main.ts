@@ -392,7 +392,7 @@ ipcMain.handle(IPC_CHANNELS.PATH_RELATIVE, (_event, fromDir: string, toPath: str
   return rel.replace(/\\/g, '/');
 });
 
-ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, (_event, target: string) => {
+ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, async (_event, target: string) => {
   if (/^https?:\/\//i.test(target)) {
     void shell.openExternal(target);
     return;
@@ -411,6 +411,18 @@ ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, (_event, target: string) => {
     absolutePath = path.join(path.dirname(currentFilePath), target);
   }
 
+  const EXECUTABLE_RE = /\.(exe|bat|cmd|com|scr|ps1|msi|vbs|js|jar|app|sh)$/i;
+  if (EXECUTABLE_RE.test(absolutePath)) {
+    const { response } = await dialog.showMessageBox(mainWindow!, {
+      type: 'warning',
+      buttons: ['Open', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      message: 'Open an executable file?',
+      detail: `This will run:\n${absolutePath}\n\nOnly continue if you trust this document.`,
+    });
+    if (response !== 0) return;
+  }
   void shell.openPath(absolutePath);
 });
 
