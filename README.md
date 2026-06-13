@@ -39,6 +39,16 @@ Built with Electron, React, and TipTap (ProseMirror).
 - **Unsaved changes guard** — Prompted to save (or discard) before closing, opening another file, or creating a new document
 - **Linked files** — Clicking a `.md` link opens it in a new Markover instance; other links open in the system default app
 
+### GitHub
+
+- **Sign in with GitHub** — File → *Sign in to GitHub* uses GitHub's device-flow (a one-time code in your browser); the token is stored encrypted via the OS keystore and remembered across restarts. The signed-in user shows in the window title, and the menu offers *Sign out*.
+- **Open from GitHub** — browse your repositories and open a Markdown file directly; saving commits it back.
+- **Save to GitHub** — publish a local document to a repository: pick repo, folder, filename, branch (existing or a new `markover/…` branch), and a commit message. The document then stays linked to GitHub, so saving commits there.
+- **Branch-protected repositories** — if a repository blocks direct changes to a branch, Markover offers to commit to another branch (or save a copy locally) instead of failing.
+- **Review a pull request** — File → *Review a Pull Request* opens an open PR's Markdown changes as read-only track changes, and lets you Approve, Request changes, or Comment.
+
+> **Note:** GitHub access uses a personal OAuth app and works with your personal repositories. Organisations that enforce SAML SSO or restrict third-party apps (e.g. WiseTech Global) need additional setup — see issue #24.
+
 ### Other
 
 - **Spell check** — Electron Hunspell integration with context-menu suggestions and "Add to dictionary"; per-document ignore list persisted as \`\` in the file
