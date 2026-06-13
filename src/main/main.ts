@@ -121,7 +121,7 @@ function updateTitle() {
 
 function rebuildMenu() {
   if (!mainWindow) return;
-  Menu.setApplicationMenu(buildMenu(mainWindow, recentFiles, openFileByPath));
+  Menu.setApplicationMenu(buildMenu(mainWindow, recentFiles, openFileByPath, githubLogin));
 }
 
 // --- Open a file (used by menu and CLI) ---

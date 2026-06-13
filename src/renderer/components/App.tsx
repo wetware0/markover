@@ -741,6 +741,16 @@ export function App() {
         case 'about': setAboutOpen(true); break;
         case 'github-sign-in': setGithubSignInOpen(true); break;
         case 'github-open': setGithubOpenOpen(true); break;
+        case 'github-sign-out': {
+          const proceed = !isDirty || window.confirm('You have unsaved changes. Sign out of GitHub anyway?');
+          if (proceed) {
+            await window.electronAPI.githubSignOut();
+            useGitHubStore.getState().setLogin(null);
+            setGithubSource(null);
+            toast.info('Signed out of GitHub.');
+          }
+          break;
+        }
         default:
           if (action.startsWith('cspell-ignore:')) {
             const word = action.slice('cspell-ignore:'.length);
@@ -765,7 +775,7 @@ export function App() {
       }
     });
     return unsubscribe;
-  }, [editor, isRawMode, handleNew, handleSave, handleSaveAs, handlePublish, handleToggleRawMode, handleAddComment, trackChangesEnabled, setTrackChangesEnabled, setGithubSource]);
+  }, [editor, isRawMode, isDirty, handleNew, handleSave, handleSaveAs, handlePublish, handleToggleRawMode, handleAddComment, trackChangesEnabled, setTrackChangesEnabled, setGithubSource]);
 
   return (
     <div className="flex flex-col h-screen print:h-auto print:overflow-visible bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
