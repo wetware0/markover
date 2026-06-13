@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, session, protocol, net, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import os from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -22,6 +23,21 @@ async function getGitRoot(dir: string): Promise<string | null> {
     gitRootCache.set(dir, null);
     return null;
   }
+}
+
+// Write atomically: a same-directory temp file is fsynced then renamed over the
+// target, so a crash mid-write can never truncate the user's document.
+async function atomicWrite(filePath: string, data: string | Uint8Array): Promise<void> {
+  const dir = path.dirname(filePath);
+  const tmp = path.join(dir, `.${path.basename(filePath)}.${randomBytes(6).toString('hex')}.tmp`);
+  const handle = await fs.open(tmp, 'w');
+  try {
+    await handle.writeFile(data);
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  await fs.rename(tmp, filePath);
 }
 
 import { IPC_CHANNELS } from '../shared/types/ipc';
@@ -284,7 +300,7 @@ ipcMain.handle(IPC_CHANNELS.FILE_OPEN, async () => {
 
 ipcMain.handle(IPC_CHANNELS.FILE_SAVE, async (_event, filePath: string, content: string) => {
   try {
-    await fs.writeFile(filePath, content, 'utf-8');
+    await atomicWrite(filePath, content);
     currentFilePath = filePath;
     updateTitle();
     await addRecentFile(filePath);
@@ -308,7 +324,7 @@ ipcMain.handle(IPC_CHANNELS.FILE_SAVE_AS, async (_event, content: string) => {
   if (result.canceled || !result.filePath) return null;
 
   try {
-    await fs.writeFile(result.filePath, content, 'utf-8');
+    await atomicWrite(result.filePath, content);
     currentFilePath = result.filePath;
     updateTitle();
     await addRecentFile(result.filePath);
@@ -341,7 +357,7 @@ ipcMain.handle(IPC_CHANNELS.EXPORT_PDF, async () => {
       printBackground: true,
       margins: { marginType: 'default' },
     });
-    await fs.writeFile(result.filePath, pdfData);
+    await atomicWrite(result.filePath, pdfData);
     return { success: true, filePath: result.filePath };
   } catch {
     return { success: false };
