@@ -414,6 +414,13 @@ ipcMain.handle(IPC_CHANNELS.SHELL_OPEN_PATH, (_event, target: string) => {
   void shell.openPath(absolutePath);
 });
 
+// True if `candidate` is inside `root` (after normalisation). Prevents the
+// asset protocol from serving files outside the document's directory tree.
+function isPathInside(candidate: string, root: string): boolean {
+  const rel = path.relative(root, candidate);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
 app.on('ready', () => {
   protocol.handle('markover-asset', async (request) => {
     const url = new URL(request.url);
@@ -456,6 +463,17 @@ app.on('ready', () => {
       // Relative path — resolve against directory of the open file
       if (!currentFilePath) return new Response('No file is open', { status: 404 });
       absolutePath = path.join(path.dirname(currentFilePath), rawSrc).replace(/\\/g, '/');
+    }
+
+    // Containment: only serve assets within the open document's directory or its
+    // git root. Without an open file there is no legitimate asset to serve.
+    const docDir = currentFilePath ? path.dirname(currentFilePath) : null;
+    if (!docDir) return new Response('No file is open', { status: 404 });
+    const gitRoot = await getGitRoot(docDir);
+    const allowedRoots = [docDir.replace(/\\/g, '/'), gitRoot?.replace(/\\/g, '/')].filter(Boolean) as string[];
+    const normalised = path.resolve(absolutePath).replace(/\\/g, '/');
+    if (!allowedRoots.some((root) => isPathInside(normalised, root))) {
+      return new Response('Asset outside document directory', { status: 403 });
     }
 
     const fileUrl = process.platform === 'win32'
