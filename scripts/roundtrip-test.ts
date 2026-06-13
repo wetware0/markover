@@ -495,7 +495,7 @@ for (const c of serializationCases) {
   }
 }
 
-console.log(`\n${passed} passed, ${failed} failed (${cases.length + serializationCases.length} total)\n`);
+console.log(`\n${passed} passed, ${failed} failed (${passed + failed} total)\n`);
 
 if (failures.length > 0) {
   console.log('=== Failures ===\n');
