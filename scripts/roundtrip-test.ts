@@ -29,7 +29,7 @@ import { getSchema } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
-import TaskList from '@tiptap/extension-task-list';
+import { MarkoverTaskList } from '../src/renderer/editor/extensions/markover-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Highlight from '@tiptap/extension-highlight';
 import { Table } from '@tiptap/extension-table';
@@ -97,7 +97,7 @@ const extensions = [
   Underline,
   Link.configure({ openOnClick: false, autolink: true }),
   MarkoverImage,
-  TaskList,
+  MarkoverTaskList,
   TaskItem.configure({ nested: true }),
   Highlight.configure({ multicolor: true }),
   Table.configure({ resizable: true }),
@@ -304,6 +304,10 @@ const cases: Case[] = [
     name: 'two bold tasks each with nested bullets (issue #22)',
     input:
       '- [ ] **Task 1: Scaffold**\n  - Create solution\n\n- [ ] **Task 2: Settings**\n  - POCO with defaults\n',
+  },
+  {
+    name: 'tight task list with nested bullets stays tight',
+    input: '- [ ] a\n  - sub\n- [ ] b\n',
   },
   {
     name: 'task list with inline code label',

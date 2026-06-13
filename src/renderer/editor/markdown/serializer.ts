@@ -318,19 +318,21 @@ const nodeHandlers: Record<string, NodeHandler> = {
   },
 
   taskList(state, node) {
-    // A task list is "loose" if any item has more than one non-empty paragraph,
-    // or if any item contains a non-paragraph block child (e.g. a nested list).
-    // Nested block children indicate the original markdown had blank lines between
-    // items, which must be preserved on round-trip.
-    let isLoose = false;
-    node.forEach((item) => {
-      let paragraphs = 0;
-      item.forEach((child) => {
-        if (child.type.name === 'paragraph' && child.childCount > 0) paragraphs++;
-        else if (child.type.name !== 'paragraph') isLoose = true;
+    // Looseness is recorded at parse time via the `loose` attribute (set by the
+    // parser's markover_task_items rule from markdown-it's hidden-token signal).
+    // We also treat any item with more than one non-empty paragraph as loose —
+    // this covers documents edited in-app where the user adds a second paragraph.
+    // Nested lists do NOT make the parent loose (CLAUDE.md convention).
+    let isLoose = node.attrs.loose === true;
+    if (!isLoose) {
+      node.forEach((item) => {
+        let paragraphs = 0;
+        item.forEach((child) => {
+          if (child.type.name === 'paragraph' && child.childCount > 0) paragraphs++;
+        });
+        if (paragraphs > 1) isLoose = true;
       });
-      if (paragraphs > 1) isLoose = true;
-    });
+    }
 
     node.forEach((child, _offset, itemIndex) => {
       // Blank line between loose task items

@@ -68,13 +68,41 @@ md.core.ruler.after('inline', 'recover_malformed_strong_with_boundary_space', (s
 // <li data-type="taskItem" data-checked="true|false"><p>…</p></li>.
 // Rewrite the token stream (not the rendered HTML) so nested and loose task lists
 // — which the old regex approach mangled — convert correctly.
+//
+// Looseness is detected at parse time (before we un-hide paragraph tokens) by
+// scanning the token range for this list and checking whether any paragraph_open
+// at the direct item level (not inside a nested sub-list) has hidden === false.
+// markdown-it sets hidden=true on paragraph tokens inside tight lists and
+// hidden=false for loose lists, so this is authoritative.
 md.core.ruler.after('github-task-lists', 'markover_task_items', (state) => {
   const tokens = state.tokens;
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
 
     if (tok.type === 'bullet_list_open' && /\bcontains-task-list\b/.test(tok.attrGet('class') || '')) {
+      // Determine whether this task list is loose BEFORE un-hiding paragraph
+      // tokens below. Scan from here to the matching bullet_list_close, tracking
+      // nesting depth. A paragraph_open seen at depth 1 (directly inside this
+      // list's own list_item_open tokens, not inside a nested sub-list) with
+      // hidden === false indicates a loose list.
+      let listDepth = 0;
+      let isLoose = false;
+      for (let j = i; j < tokens.length; j++) {
+        const t = tokens[j];
+        if (t.type === 'bullet_list_open' || t.type === 'ordered_list_open') listDepth++;
+        if (t.type === 'bullet_list_close' || t.type === 'ordered_list_close') {
+          listDepth--;
+          if (listDepth === 0) break; // reached the end of this list
+        }
+        // Only look at paragraph_open tokens directly inside this list (depth 1)
+        if (listDepth === 1 && t.type === 'paragraph_open' && t.hidden === false) {
+          isLoose = true;
+          break;
+        }
+      }
+
       tok.attrSet('data-type', 'taskList');
+      if (isLoose) tok.attrSet('data-loose', 'true');
       continue;
     }
 
