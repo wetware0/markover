@@ -305,8 +305,8 @@ ipcMain.handle(IPC_CHANNELS.FILE_SAVE, async (_event, filePath: string, content:
     updateTitle();
     await addRecentFile(filePath);
     return { success: true, filePath };
-  } catch {
-    return { success: false, filePath };
+  } catch (err) {
+    return { success: false, filePath, error: (err as Error).message };
   }
 });
 
@@ -329,8 +329,8 @@ ipcMain.handle(IPC_CHANNELS.FILE_SAVE_AS, async (_event, content: string) => {
     updateTitle();
     await addRecentFile(result.filePath);
     return { success: true, filePath: result.filePath };
-  } catch {
-    return null;
+  } catch (err) {
+    return { success: false, filePath: result.filePath, error: (err as Error).message };
   }
 });
 

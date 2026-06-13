@@ -7,6 +7,7 @@ export interface FileData {
 export interface SaveResult {
   success: boolean;
   filePath: string;
+  error?: string;
 }
 
 export const IPC_CHANNELS = {

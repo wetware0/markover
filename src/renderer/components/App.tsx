@@ -26,6 +26,7 @@ import { ImageEditDialog } from '../ui/dialogs/ImageEditDialog';
 import { ImageDropDialog } from '../ui/dialogs/ImageDropDialog';
 import { TableContextBar } from '../ui/table/TableContextBar';
 import { ToastHost } from '../ui/toast/ToastHost';
+import { toast } from '../ui/toast/toast-store';
 import { MessageSquare, GitCompare, X } from 'lucide-react';
 
 type SidebarTab = 'comments' | 'changes';
@@ -182,12 +183,20 @@ export function App() {
     }
     if (filePath) {
       const result = await window.electronAPI.saveFile(filePath, content);
-      if (result.success) setDirty(false);
+      if (result.success) {
+        setDirty(false);
+        toast.success('Saved');
+      } else {
+        toast.error(`Save failed: ${result.error ?? 'unknown error'}`);
+      }
     } else {
       const result = await window.electronAPI.saveFileAs(content);
-      if (result) {
+      if (result && result.success) {
         setFile(result.filePath, result.filePath.split(/[\\/]/).pop() || 'Untitled');
         setDirty(false);
+        toast.success('Saved');
+      } else if (result && result.error) {
+        toast.error(`Save failed: ${result.error}`);
       }
     }
   }, [filePath, isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata]);
@@ -201,9 +210,12 @@ export function App() {
       content = getMarkdown();
     }
     const result = await window.electronAPI.saveFileAs(content);
-    if (result) {
+    if (result && result.success) {
       setFile(result.filePath, result.filePath.split(/[\\/]/).pop() || 'Untitled');
       setDirty(false);
+      toast.success('Saved');
+    } else if (result && result.error) {
+      toast.error(`Save failed: ${result.error}`);
     }
   }, [isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata]);
 
