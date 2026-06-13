@@ -111,6 +111,15 @@ export function App() {
     window.electronAPI.notifySessionState(fileName || 'Untitled', githubLogin);
   }, [fileName, githubLogin]);
 
+  // Restore the GitHub session on startup: the token is persisted (encrypted)
+  // in the main process, so if it's still valid, reflect the paired account in
+  // the title and menu without making the user sign in again.
+  useEffect(() => {
+    window.electronAPI.githubGetUser()
+      .then((user) => { if (user?.login) useGitHubStore.getState().setLogin(user.login); })
+      .catch(() => { /* no/invalid token — stay signed out */ });
+  }, []);
+
   // Seed author name from OS login on first launch (only if no name persisted)
   useEffect(() => {
     if (!userName.trim()) {
