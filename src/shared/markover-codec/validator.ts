@@ -1,7 +1,7 @@
 import type { MarkovMetadata } from './schema';
 
 export interface ValidationError {
-  type: 'orphaned_highlight' | 'orphaned_comment' | 'missing_id' | 'duplicate_id' | 'invalid_range';
+  type: 'orphaned_highlight' | 'orphaned_comment' | 'missing_id' | 'duplicate_id' | 'invalid_range' | 'out_of_bounds';
   message: string;
   id?: string;
 }
@@ -10,7 +10,7 @@ export interface ValidationError {
  * Validate the integrity of parsed markover metadata.
  * Returns an array of validation errors (empty = valid).
  */
-export function validateMetadata(metadata: MarkovMetadata): ValidationError[] {
+export function validateMetadata(metadata: MarkovMetadata, docLength?: number): ValidationError[] {
   const errors: ValidationError[] = [];
   const allIds = new Set<string>();
 
@@ -44,6 +44,9 @@ export function validateMetadata(metadata: MarkovMetadata): ValidationError[] {
         id: hl.id,
       });
     }
+    if (docLength !== undefined && (hl.endOffset > docLength || hl.startOffset < 0)) {
+      errors.push({ type: 'out_of_bounds', message: `Highlight "${hl.id}" offset out of bounds`, id: hl.id });
+    }
   }
 
   // Validate comments have matching highlights
@@ -74,6 +77,9 @@ export function validateMetadata(metadata: MarkovMetadata): ValidationError[] {
         id: ins.id,
       });
     }
+    if (docLength !== undefined && (ins.endOffset > docLength || ins.startOffset < 0)) {
+      errors.push({ type: 'out_of_bounds', message: `Insertion "${ins.id}" offset out of bounds`, id: ins.id });
+    }
   }
 
   // Validate deletions
@@ -85,6 +91,9 @@ export function validateMetadata(metadata: MarkovMetadata): ValidationError[] {
         message: `Deletion "${del.id}" has start > end`,
         id: del.id,
       });
+    }
+    if (docLength !== undefined && (del.endOffset > docLength || del.startOffset < 0)) {
+      errors.push({ type: 'out_of_bounds', message: `Deletion "${del.id}" offset out of bounds`, id: del.id });
     }
   }
 

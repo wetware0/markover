@@ -3,7 +3,7 @@ import { EditorContent } from '@tiptap/react';
 import { nanoid } from 'nanoid';
 import { useMarkoverEditor } from '../editor/use-editor';
 import { useEditorStore } from '../store/editor-store';
-import { parseMarkoverFile } from '../../shared/markover-codec';
+import { parseMarkoverFile, validateMetadata } from '../../shared/markover-codec';
 import { useUserStore, getAuthorName } from '../store/user-store';
 import { UserSettingsDialog } from '../ui/UserSettingsDialog';
 import { useCommentsStore } from '../collaboration/comments/comment-store';
@@ -565,6 +565,10 @@ export function App() {
         loadContent(data.content);
         setFile(data.filePath, data.fileName);
         const meta = getMetadata();
+        const problems = validateMetadata(meta);
+        if (problems.length > 0) {
+          toast.error(`This file's collaboration data had ${problems.length} issue(s) and may display incompletely.`);
+        }
         setComments(meta.comments);
         applyCspellIgnores(meta);
         editor?.commands.clearSearch();
@@ -594,6 +598,10 @@ export function App() {
               loadContent(data.content);
               setFile(data.filePath, data.fileName);
               const meta = getMetadata();
+              const problems = validateMetadata(meta);
+              if (problems.length > 0) {
+                toast.error(`This file's collaboration data had ${problems.length} issue(s) and may display incompletely.`);
+              }
               setComments(meta.comments);
               applyCspellIgnores(meta);
               editor?.commands.clearSearch();
