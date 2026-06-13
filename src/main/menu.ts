@@ -46,6 +46,7 @@ export function buildMenu(
           ? { label: `Sign out of GitHub (${githubLogin})`, click: () => sendAction('github-sign-out') } as MenuItemConstructorOptions
           : { label: 'Sign in to GitHub...', click: () => sendAction('github-sign-in') } as MenuItemConstructorOptions,
         { label: 'Open from GitHub...', click: () => sendAction('github-open') },
+        { label: 'Save to GitHub...', click: () => sendAction('github-save-as') },
         { type: 'separator' },
         {
           label: 'Save',

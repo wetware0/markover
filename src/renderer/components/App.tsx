@@ -31,6 +31,7 @@ import { MessageSquare, GitCompare, X } from 'lucide-react';
 import { useGitHubStore, type GitHubSource } from '../github/github-store';
 import { GitHubSignInDialog } from '../github/GitHubSignInDialog';
 import { OpenFromGitHubDialog } from '../github/OpenFromGitHubDialog';
+import { SaveToGitHubDialog } from '../github/SaveToGitHubDialog';
 
 type SidebarTab = 'comments' | 'changes';
 
@@ -73,6 +74,7 @@ export function App() {
   const [discardConfirm, setDiscardConfirm] = useState<{ message: string; onProceed: () => void } | null>(null);
   const [githubSignInOpen, setGithubSignInOpen] = useState(false);
   const [githubOpenOpen, setGithubOpenOpen] = useState(false);
+  const [githubSaveOpen, setGithubSaveOpen] = useState(false);
   const githubSource = useGitHubStore((s) => s.source);
   const setGithubSource = useGitHubStore((s) => s.setSource);
   const githubLogin = useGitHubStore((s) => s.login);
@@ -750,6 +752,7 @@ export function App() {
         case 'about': setAboutOpen(true); break;
         case 'github-sign-in': setGithubSignInOpen(true); break;
         case 'github-open': setGithubOpenOpen(true); break;
+        case 'github-save-as': if (githubLogin) setGithubSaveOpen(true); else toast.info('Sign in to GitHub first.'); break;
         case 'github-sign-out': {
           const proceed = !isDirty || window.confirm('You have unsaved changes. Sign out of GitHub anyway?');
           if (proceed) {
@@ -1013,6 +1016,13 @@ export function App() {
         open={githubOpenOpen}
         onClose={() => setGithubOpenOpen(false)}
         onOpened={loadFromGitHub}
+      />
+      <SaveToGitHubDialog
+        open={githubSaveOpen}
+        onClose={() => setGithubSaveOpen(false)}
+        initialFileName={fileName && fileName !== 'Untitled' ? fileName : 'untitled.md'}
+        getContent={() => { if (isRawMode) return rawContentRef.current; syncCommentsToMetadata(); return getMarkdown(); }}
+        onSaved={(_src, name) => { setFile(null, name); setDirty(false); }}
       />
 
       <ToastHost />
