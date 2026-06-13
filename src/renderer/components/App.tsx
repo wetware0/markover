@@ -25,6 +25,7 @@ import { MermaidEditDialog } from '../ui/dialogs/MermaidEditDialog';
 import { ImageEditDialog } from '../ui/dialogs/ImageEditDialog';
 import { ImageDropDialog } from '../ui/dialogs/ImageDropDialog';
 import { TableContextBar } from '../ui/table/TableContextBar';
+import { ToastHost } from '../ui/toast/ToastHost';
 import { MessageSquare, GitCompare, X } from 'lucide-react';
 
 type SidebarTab = 'comments' | 'changes';
@@ -878,6 +879,8 @@ export function App() {
           </div>
         </div>
       )}
+
+      <ToastHost />
     </div>
   );
 }
