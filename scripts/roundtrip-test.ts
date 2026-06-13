@@ -293,6 +293,27 @@ const cases: Case[] = [
     input: '- [ ] buy milk\n- [x] write code review\n',
   },
   {
+    name: 'task list with bold label (issue #22)',
+    input: '- [ ] **Task 1: Project scaffold**\n',
+  },
+  {
+    name: 'task list with bold label and nested bullets (issue #22)',
+    input: '- [ ] **Task 1: Project scaffold**\n  - Create the solution\n  - Add refs\n',
+  },
+  {
+    name: 'two bold tasks each with nested bullets (issue #22)',
+    input:
+      '- [ ] **Task 1: Scaffold**\n  - Create solution\n\n- [ ] **Task 2: Settings**\n  - POCO with defaults\n',
+  },
+  {
+    name: 'task list with inline code label',
+    input: '- [ ] configure `settings.json`\n',
+  },
+  {
+    name: 'mixed checked/unchecked with formatting',
+    input: '- [x] **done** item\n- [ ] _todo_ item\n',
+  },
+  {
     name: 'multi-paragraph footnote',
     input:
       'Ref[^1]\n\n[^1]: First line of footnote.\n',

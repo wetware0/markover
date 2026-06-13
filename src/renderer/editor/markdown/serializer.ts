@@ -63,6 +63,10 @@ class MarkdownSerializerState {
     }
   }
 
+  endsWithBlankLine(): boolean {
+    return this.output.endsWith('\n\n');
+  }
+
   closeBlock() {
     this.ensureNewLine();
     if (!this.output.endsWith('\n\n') && this.output.length > 0) {
@@ -314,17 +318,52 @@ const nodeHandlers: Record<string, NodeHandler> = {
   },
 
   taskList(state, node) {
-    node.forEach((child) => {
+    // A task list is "loose" if any item has more than one non-empty paragraph,
+    // or if any item contains a non-paragraph block child (e.g. a nested list).
+    // Nested block children indicate the original markdown had blank lines between
+    // items, which must be preserved on round-trip.
+    let isLoose = false;
+    node.forEach((item) => {
+      let paragraphs = 0;
+      item.forEach((child) => {
+        if (child.type.name === 'paragraph' && child.childCount > 0) paragraphs++;
+        else if (child.type.name !== 'paragraph') isLoose = true;
+      });
+      if (paragraphs > 1) isLoose = true;
+    });
+
+    node.forEach((child, _offset, itemIndex) => {
+      // Blank line between loose task items
+      if (itemIndex > 0 && isLoose && !state.endsWithBlankLine()) {
+        state.ensureNewLine();
+        state.write('\n');
+      }
       const checked = child.attrs.checked as boolean;
       state.write(checked ? '- [x] ' : '- [ ] ');
       // Render task item children
+      let first = true;
       child.forEach((grandchild) => {
         if (grandchild.type.name === 'paragraph') {
+          if (!first) {
+            if (isLoose && !state.endsWithBlankLine()) {
+              state.ensureNewLine();
+              state.write('\n');
+            }
+            state.write('  ');
+          }
           state.renderInlineContent(grandchild);
           state.ensureNewLine();
         } else {
-          state.renderNode(grandchild, child, 0);
+          // Block child (nested list, etc.) — render into sub-state and re-indent
+          const inner = new MarkdownSerializerState();
+          inner.renderNode(grandchild, child, 0);
+          const raw = inner.getOutput().replace(/\n+$/, '');
+          for (const line of raw.split('\n')) {
+            if (line.length > 0) state.write('  ' + line);
+            state.ensureNewLine();
+          }
         }
+        first = false;
       });
     });
     state.closeBlock();
