@@ -4,6 +4,14 @@ All notable changes to Markover are documented here.
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- **Cleared additional development-only dependency advisories** — pinned `tmp` (`^0.2.6`, clears a high-severity advisory), `picomatch` (`^2.3.2`), `ip-address` (`^10.1.1`), and `@tootallnate/once` (`^2.0.1`) via npm `overrides`, and bumped `postcss` to `^8.5.10`. These are build-time dependencies and are not included in the packaged application. The remaining `esbuild` and `vite` advisories (also dev-server only) require upgrading Vite from 5.x to a newer major — deferred because the pinned `@vitejs/plugin-react@6` has a conflicting Vite peer requirement; tracked for a dedicated toolchain upgrade.
+
+---
+
 ## [1.1.1](https://github.com/wetware0/markover/compare/v1.1.0...v1.1.1) — 2026-06-13
 
 ### Security
