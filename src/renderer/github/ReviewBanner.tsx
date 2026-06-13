@@ -11,17 +11,21 @@ export function ReviewBanner({ onDone }: { onDone: () => void }) {
   const submit = async (event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT') => {
     setBusy(true);
     try {
-      await window.electronAPI.githubSubmitReview(session.owner, session.repo, session.number, event, body);
-      toast.success(`Review submitted (${event.replace('_', ' ').toLowerCase()})`);
-      onDone();
-    } catch (e) {
-      const msg = (e as Error).message;
-      // GitHub forbids approving/changing your own PR — show a plain sentence.
-      if (/approve your own/i.test(msg)) {
-        toast.error("You can't approve your own pull request — try Comment instead.");
+      const res = await window.electronAPI.githubSubmitReview(session.owner, session.repo, session.number, event, body);
+      if (res.ok) {
+        toast.success(`Review submitted (${event.replace('_', ' ').toLowerCase()})`);
+        onDone();
       } else {
-        toast.error(`Could not submit review: ${msg}`);
+        const msg = res.error ?? 'unknown error';
+        // GitHub forbids approving your own PR — show a plain sentence.
+        if (/approve your own/i.test(msg)) {
+          toast.error("You can't approve your own pull request — try Comment instead.");
+        } else {
+          toast.error(`Could not submit review: ${msg}`);
+        }
       }
+    } catch (e) {
+      toast.error(`Could not submit review: ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }

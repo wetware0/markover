@@ -23,5 +23,15 @@ export function registerGitHubHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.GITHUB_LIST_PRS, (_e, owner: string, repo: string) => api.listPullRequests(owner, repo));
   ipcMain.handle(IPC_CHANNELS.GITHUB_LIST_PR_FILES, (_e, owner: string, repo: string, num: number) => api.listPullRequestFiles(owner, repo, num));
   ipcMain.handle(IPC_CHANNELS.GITHUB_GET_PR, (_e, owner: string, repo: string, num: number) => api.getPullRequest(owner, repo, num));
-  ipcMain.handle(IPC_CHANNELS.GITHUB_SUBMIT_REVIEW, (_e, owner: string, repo: string, num: number, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body: string) => api.submitReview(owner, repo, num, event, body));
+  // Return a result object instead of throwing: rejecting an ipcMain.handle call
+  // makes Electron log a scary "Error occurred in handler" line, and submitting a
+  // review legitimately fails for expected reasons (e.g. approving your own PR).
+  ipcMain.handle(IPC_CHANNELS.GITHUB_SUBMIT_REVIEW, async (_e, owner: string, repo: string, num: number, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body: string) => {
+    try {
+      await api.submitReview(owner, repo, num, event, body);
+      return { ok: true as const };
+    } catch (e) {
+      return { ok: false as const, error: (e as Error).message };
+    }
+  });
 }

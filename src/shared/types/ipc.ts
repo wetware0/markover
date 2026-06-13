@@ -83,7 +83,7 @@ export interface ElectronAPI {
   githubListPullRequests: (owner: string, repo: string) => Promise<Array<{ number: number; title: string; user: string; base: string; head: string; updated_at: string }>>;
   githubListPullRequestFiles: (owner: string, repo: string, num: number) => Promise<Array<{ filename: string; status: string }>>;
   githubGetPullRequest: (owner: string, repo: string, num: number) => Promise<{ baseSha: string; headSha: string; baseRef: string; headRef: string; author: string }>;
-  githubSubmitReview: (owner: string, repo: string, num: number, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body: string) => Promise<void>;
+  githubSubmitReview: (owner: string, repo: string, num: number, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT', body: string) => Promise<{ ok: boolean; error?: string }>;
   notifySessionState: (documentName: string, githubLogin: string | null) => void;
 }
 
