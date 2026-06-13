@@ -28,10 +28,12 @@ import { TableContextBar } from '../ui/table/TableContextBar';
 import { ToastHost } from '../ui/toast/ToastHost';
 import { toast } from '../ui/toast/toast-store';
 import { MessageSquare, GitCompare, X } from 'lucide-react';
-import { useGitHubStore, type GitHubSource } from '../github/github-store';
+import { useGitHubStore, type GitHubSource, type ReviewSession } from '../github/github-store';
 import { GitHubSignInDialog } from '../github/GitHubSignInDialog';
 import { OpenFromGitHubDialog } from '../github/OpenFromGitHubDialog';
 import { SaveToGitHubDialog } from '../github/SaveToGitHubDialog';
+import { ReviewPullRequestDialog } from '../github/ReviewPullRequestDialog';
+import { ReviewBanner } from '../github/ReviewBanner';
 import { isProtectedOrForbidden, offerWriteFallback, notifyWriteFailed } from '../github/github-write-fallback';
 
 type SidebarTab = 'comments' | 'changes';
@@ -79,6 +81,8 @@ export function App() {
   const githubSource = useGitHubStore((s) => s.source);
   const setGithubSource = useGitHubStore((s) => s.setSource);
   const githubLogin = useGitHubStore((s) => s.login);
+  const reviewMode = useGitHubStore((s) => s.reviewMode);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
 
   // Node edit state (KaTeX / Mermaid click-to-edit dialogs)
   type NodeEdit =
@@ -214,6 +218,7 @@ export function App() {
   }, [isRawMode, getMarkdown, loadContent, getMetadata, setComments, setRawMode, syncCommentsToMetadata, editor, findReplaceStore]);
 
   const handleSave = useCallback(async () => {
+    if (useGitHubStore.getState().reviewMode) return;
     if (githubSource) {
       let ghContent: string;
       if (isRawMode) ghContent = rawContentRef.current;
@@ -643,6 +648,30 @@ export function App() {
     guardDirty(`You have unsaved changes. Open "${fileName}" anyway?`, doLoad);
   }, [setRawMode, loadContent, setFile, setGithubSource, getMetadata, setComments, applyCspellIgnores, setDirty, editor, findReplaceStore, guardDirty]);
 
+  const enterReview = useCallback((session: ReviewSession, tracked: string) => {
+    const doEnter = () => {
+      setRawMode(false);
+      rawContentRef.current = '';
+      loadContent(tracked);
+      setFile(null, session.path.split('/').pop() || session.path);
+      setGithubSource(null);
+      useGitHubStore.getState().setReviewSession(session);
+      useGitHubStore.getState().setReviewMode(true);
+      editor?.setEditable(false);
+      setDirty(false);
+      setComments(getMetadata().comments);
+    };
+    guardDirty('You have unsaved changes. Review this pull request anyway?', doEnter);
+  }, [setRawMode, loadContent, setFile, setGithubSource, editor, setDirty, setComments, getMetadata, guardDirty]);
+
+  const exitReview = useCallback(() => {
+    useGitHubStore.getState().setReviewMode(false);
+    useGitHubStore.getState().setReviewSession(null);
+    editor?.setEditable(true);
+    loadContent('');
+    setFile(null, 'Untitled');
+  }, [editor, loadContent, setFile]);
+
   // Handle file opened from main process (recent files, CLI arg, drag-drop)
   useEffect(() => {
     const unsubscribe = window.electronAPI.onFileChanged((data) => {
@@ -764,6 +793,7 @@ export function App() {
         case 'github-sign-in': setGithubSignInOpen(true); break;
         case 'github-open': setGithubOpenOpen(true); break;
         case 'github-save-as': if (githubLogin) setGithubSaveOpen(true); else toast.info('Sign in to GitHub first.'); break;
+        case 'github-review': if (githubLogin) setReviewDialogOpen(true); else toast.info('Sign in to GitHub first.'); break;
         case 'github-sign-out': {
           const proceed = !isDirty || window.confirm('You have unsaved changes. Sign out of GitHub anyway?');
           if (proceed) {
@@ -833,6 +863,7 @@ export function App() {
           </div>
         ) : (
         <div className="flex-1 overflow-y-auto print:overflow-visible bg-white dark:bg-gray-900" onClick={handleEditorClick}>
+          {reviewMode && <ReviewBanner onDone={exitReview} />}
           <div className="mx-auto" style={{ fontSize: `${zoomLevel}%`, maxWidth: `${56 * zoomLevel / 100}rem` }}>
             <EditorContent editor={editor} className="min-h-full" />
           </div>
@@ -1035,6 +1066,7 @@ export function App() {
         getContent={() => { if (isRawMode) return rawContentRef.current; syncCommentsToMetadata(); return getMarkdown(); }}
         onSaved={(_src, name) => { setFile(null, name); setDirty(false); }}
       />
+      <ReviewPullRequestDialog open={reviewDialogOpen} onClose={() => setReviewDialogOpen(false)} onReview={enterReview} />
 
       <ToastHost />
     </div>

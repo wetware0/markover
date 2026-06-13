@@ -47,6 +47,7 @@ export function buildMenu(
           : { label: 'Sign in to GitHub...', click: () => sendAction('github-sign-in') } as MenuItemConstructorOptions,
         { label: 'Open from GitHub...', click: () => sendAction('github-open') },
         { label: 'Save to GitHub...', click: () => sendAction('github-save-as') },
+        { label: 'Review a Pull Request...', click: () => sendAction('github-review') },
         { type: 'separator' },
         {
           label: 'Save',
