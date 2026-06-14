@@ -10,7 +10,9 @@ All notable changes to Markover are documented here.
 
 - **Cleared additional development-only dependency advisories** — pinned `tmp` (`^0.2.6`, clears a high-severity advisory), `picomatch` (`^2.3.2`), `ip-address` (`^10.1.1`), and `@tootallnate/once` (`^2.0.1`) via npm `overrides`, and bumped `postcss` to `^8.5.10`. These are build-time dependencies and are not included in the packaged application.
 - **Removed unused `@vitejs/plugin-react` and `@tailwindcss/vite` devDependencies** — neither was imported (JSX is transpiled via `esbuild`, Tailwind runs through `postcss.config.js`). This removed the `vite@^8` peer conflict that previously forced `--legacy-peer-deps`; `npm install` now runs flag-free.
-- **Upgraded Vite from 5.x to 7.3.5** — clears the `vite` dev-server advisories. Verified against the full Playwright e2e suite on the Vite 7 build. The remaining `esbuild` advisories (dev-server only, fixed in esbuild 0.28.1) persist because Vite 7 still bundles esbuild 0.27.x; clearing them needs Vite to ship esbuild 0.28.1 (Vite 8 / Rolldown) or an esbuild override validated on Vite 7.
+- **Upgraded Vite from 5.x to 7.3.5** — clears the `vite` dev-server advisories. Verified against the full Playwright e2e suite on the Vite 7 build.
+- **Pinned `esbuild` to `^0.28.1` via `overrides`** — clears the remaining high-severity esbuild dev-server advisories. The bump that was impossible on Vite 5 (would break the build) works on Vite 7, which already ships esbuild 0.27.x. Verified with the full package build and Playwright e2e.
+- **Resolved the last `brace-expansion` advisory** via `npm audit fix`, leaving `npm audit` at **0 vulnerabilities**. All remaining items were build-time only and never shipped in the packaged application.
 
 ---
 
