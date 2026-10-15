@@ -137,6 +137,9 @@ interface Case {
   // Expected output after roundtrip. If omitted, we expect the input to roundtrip
   // verbatim (after a final newline is added by the serializer).
   expected?: string;
+  expectedText?: string;
+  expectedMath?: string[];
+  stable?: boolean;
 }
 
 const cases: Case[] = [
@@ -345,6 +348,168 @@ const cases: Case[] = [
   { name: 'plain asterisks (escaped)', input: 'a \\*not bold\\* b\n' },
   { name: 'bracket characters', input: 'array \\[0\\] = 1\n' },
 
+  // Numeric display regressions: check rendering as well as repeated saves.
+  {
+    name: 'single dollar price stays text',
+    input: 'Total: $1,234.56\n',
+    expected: 'Total: \\$1,234.56\n',
+    expectedText: 'Total: $1,234.56',
+    stable: true,
+  },
+  {
+    name: 'two dollar prices are not math',
+    input: 'Prices are $10.00 and $20.00.\n',
+    expected: 'Prices are \\$10.00 and \\$20.00.\n',
+    expectedText: 'Prices are $10.00 and $20.00.',
+    stable: true,
+  },
+  {
+    name: 'money and percentage retain the whole sentence',
+    input: 'A $100 item with 10% tax costs $110.\n',
+    expected: 'A \\$100 item with 10% tax costs \\$110.\n',
+    expectedText: 'A $100 item with 10% tax costs $110.',
+    stable: true,
+  },
+  {
+    name: 'formatted dollar prices preserve bold',
+    input: '**$10.00** and **$20.00**\n',
+    expected: '**\\$10.00** and **\\$20.00**\n',
+    expectedText: '$10.00 and $20.00',
+    stable: true,
+  },
+  {
+    name: 'escaped dollar prices stay escaped on save',
+    input: 'Prices are \\$10.00 and \\$20.00.\n',
+    expectedText: 'Prices are $10.00 and $20.00.',
+    stable: true,
+  },
+  {
+    name: 'currency and percentage across soft breaks stay text',
+    input: 'Price: $100\nTax: 10%\nTotal: $110\n',
+    expected: 'Price: \\$100 Tax: 10% Total: \\$110\n',
+    expectedText: 'Price: $100 Tax: 10% Total: $110',
+    stable: true,
+  },
+  {
+    name: 'spaced currency symbols stay text',
+    input: 'Prices: $ 10 and $ 20.\n',
+    expected: 'Prices: \\$ 10 and \\$ 20.\n',
+    expectedText: 'Prices: $ 10 and $ 20.',
+    stable: true,
+  },
+  {
+    name: 'price before genuine inline math',
+    input: 'Cost $10; formula $x^2$.\n',
+    expected: 'Cost \\$10; formula $x^2$.\n',
+    expectedMath: ['x^2'],
+    stable: true,
+  },
+  {
+    name: 'ordinary numbers and percentages',
+    input: '0.00; -1,234.56; 1.234,56; 1e6; 0%; 12.50%; -0.25%; 150%\n',
+    expectedText: '0.00; -1,234.56; 1.234,56; 1e6; 0%; 12.50%; -0.25%; 150%',
+    stable: true,
+  },
+  {
+    name: 'currency in inline code stays literal',
+    input: '`$100 + 10% = $110`\n',
+    expectedText: '$100 + 10% = $110',
+    stable: true,
+  },
+  {
+    name: 'genuine numeric math and escaped percentage',
+    input: '$5$ and $r = 12.5\\%$\n',
+    expectedMath: ['5', 'r = 12.5\\%'],
+    stable: true,
+  },
+  {
+    name: 'multiline inline formula still supported',
+    input: '$x +\ny$\n',
+    expectedMath: ['x +\ny'],
+    stable: true,
+  },
+  {
+    name: 'inline math with escaped dollar',
+    input: '$x + \\$5$\n',
+    expectedMath: ['x + \\$5'],
+    stable: true,
+  },
+  {
+    name: 'numeric paragraph prefix with period',
+    input: '2026\\. Annual revenue: 12.5%\n',
+    expectedText: '2026. Annual revenue: 12.5%',
+    stable: true,
+  },
+  {
+    name: 'numeric paragraph prefix with parenthesis',
+    input: '2026\\) Annual revenue: 12.5%\n',
+    expectedText: '2026) Annual revenue: 12.5%',
+    stable: true,
+  },
+  {
+    name: 'numeric paragraph prefix after hard break',
+    input: 'Revenue  \n2026\\. Forecast\n',
+    expectedText: 'Revenue2026. Forecast',
+    stable: true,
+  },
+  {
+    name: 'numeric paragraph inside bullet list',
+    input: '- 2026\\. Forecast\n',
+    expectedText: '2026. Forecast',
+    stable: true,
+  },
+  {
+    name: 'numeric paragraph inside task list',
+    input: '- [ ] 2026\\) Forecast\n',
+    expectedText: '2026) Forecast',
+    stable: true,
+  },
+  {
+    name: 'numeric paragraph inside blockquote',
+    input: '> 2026\\. Forecast\n',
+    expectedText: '2026. Forecast',
+    stable: true,
+  },
+  {
+    name: 'table pipe does not discard percentage',
+    input: '| Condition | Value |\n| --- | ---: |\n| x \\| y | 12.5% |\n',
+    expectedText: 'ConditionValuex | y12.5%',
+    stable: true,
+  },
+  {
+    name: 'table header pipe does not create columns',
+    input: '| Net \\| Gross | Rate |\n| --- | ---: |\n| 100.00 | 12.5% |\n',
+    stable: true,
+  },
+  {
+    name: 'table code pipe stays in its cell',
+    input: '| Condition | Value |\n| --- | --- |\n| `x \\| y` | 12.5% |\n',
+    stable: true,
+  },
+  {
+    name: 'table math pipes stay in their cell',
+    input: '| Formula | Value |\n| --- | --- |\n| $\\|x\\|$ | 12.5% |\n',
+    expectedMath: ['|x|'],
+    stable: true,
+  },
+  {
+    name: 'table amounts separated by hard break retain one row',
+    input: '| Revenue | Margin |\n| ---: | ---: |\n| 1,234.56<br>2,345.67 | 12.5% |\n',
+    expectedText: 'RevenueMargin1,234.562,345.6712.5%',
+    stable: true,
+  },
+  {
+    name: 'table header hard break stays in header',
+    input: '| Net<br>Gross | Rate |\n| --- | --- |\n| 100.00 | 12.5% |\n',
+    stable: true,
+  },
+  {
+    name: 'currency range in table cell stays text',
+    input: '| Item | Range |\n| --- | --- |\n| Standard | \\$10.00 to \\$20.00 |\n',
+    expectedText: 'ItemRangeStandard$10.00 to $20.00',
+    stable: true,
+  },
+
   // === Codec malformed-input (graceful degradation) ===
   {
     name: 'unmatched comment end marker is ignored',
@@ -368,6 +533,16 @@ const cases: Case[] = [
 ];
 
 const serializationCases: { name: string; docJson: Record<string, unknown>; expected: string }[] = [
+  {
+    name: 'typed prices serialize as literal dollars',
+    docJson: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Prices are $10.00 and $20.00.' }] }] },
+    expected: 'Prices are \\$10.00 and \\$20.00.\n',
+  },
+  {
+    name: 'typed numeric prefix serializes as a paragraph',
+    docJson: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '2026) Annual revenue: 12.5%' }] }] },
+    expected: '2026\\) Annual revenue: 12.5%\n',
+  },
   {
     name: 'bold mark over trailing space',
     docJson: {
@@ -422,6 +597,21 @@ for (const c of cases) {
   let got: string;
   try {
     got = roundtrip(c.input);
+    if (c.stable) {
+      const parse = (source: string) => PMNode.fromJSON(schema, generateJSON(markdownToHtml(parseMarkoverFile(source).cleanMarkdown), extensions));
+      const initial = parse(c.input);
+      const reopened = parse(got);
+      const math: string[] = [];
+      initial.descendants((node) => { if (node.type.name === 'katexInline') math.push(node.attrs.math as string); });
+      if (c.expectedText !== undefined && initial.textContent !== c.expectedText) {
+        throw new Error(`Initial text: expected ${JSON.stringify(c.expectedText)}, got ${JSON.stringify(initial.textContent)}`);
+      }
+      if (c.expectedMath !== undefined && JSON.stringify(math) !== JSON.stringify(c.expectedMath)) {
+        throw new Error(`Initial math: expected ${JSON.stringify(c.expectedMath)}, got ${JSON.stringify(math)}`);
+      }
+      if (!initial.eq(reopened)) throw new Error(`Document structure changed after save: ${JSON.stringify(reopened.toJSON())}`);
+      if (normalize(roundtrip(got)) !== normalize(got)) throw new Error('Markdown changed on second save');
+    }
   } catch (err) {
     failed++;
     failures.push({

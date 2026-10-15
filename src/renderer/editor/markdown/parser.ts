@@ -142,12 +142,16 @@ md.inline.ruler.after('escape', 'katex_inline', (state, silent) => {
   if (state.src[state.pos] !== '$' || state.src[state.pos + 1] === '$') return false;
 
   const start = state.pos + 1;
+  if (start >= state.posMax || /\s/.test(state.src[start])) return false;
   let end = start;
   while (end < state.posMax && state.src[end] !== '$') {
     if (state.src[end] === '\\') end++; // skip escaped
     end++;
   }
   if (end >= state.posMax) return false;
+  // A closing delimiter cannot follow whitespace or start another price.
+  // This keeps "$10 and $20" as prose while still allowing "$5$" formulas.
+  if (end === start || /\s/.test(state.src[end - 1]) || /\d/.test(state.src[end + 1] ?? '')) return false;
 
   if (!silent) {
     const token = state.push('katex_inline', 'span', 0);

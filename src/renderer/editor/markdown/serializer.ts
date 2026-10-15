@@ -81,6 +81,13 @@ class MarkdownSerializerState {
     });
   }
 
+  renderParagraph(node: Node) {
+    const inner = new MarkdownSerializerState();
+    inner.renderInlineContent(node);
+    // Literal numeric prefixes must not become ordered-list markers on reload.
+    this.write(inner.getOutput().replace(/^([ \t]{0,3}\d{1,9})([.)])(?=[ \t]|$)/gm, '$1\\$2'));
+  }
+
   renderNode(node: Node, parent: Node, index: number) {
     const handler = nodeHandlers[node.type.name];
     if (handler) {
@@ -250,7 +257,7 @@ class MarkdownSerializerState {
           }
           this.write('  '); // continuation indent
         }
-        this.renderInlineContent(child);
+        this.renderParagraph(child);
         this.ensureNewLine();
       } else {
         // Block child (nested list, image, etc.) — render into sub-state
@@ -277,6 +284,13 @@ class MarkdownSerializerState {
 
 type NodeHandler = (state: MarkdownSerializerState, node: Node, parent: Node, index: number) => void;
 
+function serializeTableCell(cell: Node): string {
+  const inner = new MarkdownSerializerState();
+  inner.renderInlineContent(cell.firstChild || cell);
+  // A Markdown table row must stay on one source line, including code/math cells.
+  return inner.getOutput().trim().replace(/ *\n/g, '<br>').replace(/\|/g, '\\|');
+}
+
 const nodeHandlers: Record<string, NodeHandler> = {
   doc(state, node) {
     node.forEach((child, _offset, index) => {
@@ -288,7 +302,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
   },
 
   paragraph(state, node, parent) {
-    state.renderInlineContent(node);
+    state.renderParagraph(node);
     // Don't add blank line if inside a list item
     if (parent.type.name === 'listItem' || parent.type.name === 'taskItem') {
       state.ensureNewLine();
@@ -353,7 +367,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
             }
             state.write('  ');
           }
-          state.renderInlineContent(grandchild);
+          state.renderParagraph(grandchild);
           state.ensureNewLine();
         } else {
           // Block child (nested list, etc.) — render into sub-state and re-indent
@@ -460,9 +474,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
     state.write('| ');
     headerRow.forEach((cell, _offset, i) => {
       if (i > 0) state.write(' | ');
-      const inner = new MarkdownSerializerState();
-      inner.renderInlineContent(cell.firstChild || cell);
-      state.write(inner.getOutput().trim());
+      state.write(serializeTableCell(cell));
     });
     state.write(' |');
     state.ensureNewLine();
@@ -485,9 +497,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
       state.write('| ');
       rows[r].forEach((cell, _offset, i) => {
         if (i > 0) state.write(' | ');
-        const inner = new MarkdownSerializerState();
-        inner.renderInlineContent(cell.firstChild || cell);
-        state.write(inner.getOutput().trim());
+        state.write(serializeTableCell(cell));
       });
       state.write(' |');
       state.ensureNewLine();
@@ -694,7 +704,7 @@ function escapeMarkdown(text: string, marks: readonly Mark[]): string {
   // Only escape characters that could trigger markdown formatting in inline context
   return text
     .replace(/\\/g, '\\\\')
-    .replace(/([*_~`])/g, '\\$1')
+    .replace(/([*_~`$])/g, '\\$1')
     .replace(/\[/g, '\\[')
     .replace(/\]/g, '\\]');
 }
