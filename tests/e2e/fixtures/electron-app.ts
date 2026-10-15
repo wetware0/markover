@@ -15,26 +15,35 @@ function getAppPath(): string {
 type ElectronFixtures = {
   electronApp: ElectronApplication;
   page: Page;
+  closeGuardEnabled: boolean;
 };
 
 export const test = base.extend<ElectronFixtures>({
-  // eslint-disable-next-line no-empty-pattern
-  electronApp: async ({}, use) => {
+  closeGuardEnabled: [false, { option: true }],
+  electronApp: async ({ closeGuardEnabled }, use) => {
     const app = await _electron.launch({
       executablePath: getAppPath(),
       // E2E mode: the main process reads MARKOVER_E2E_TEST to skip the
       // auto-update probe and the unsaved-changes close dialog so test
-      // teardown doesn't race a dialog or hang on network.
-      env: { ...process.env, MARKOVER_E2E_TEST: '1' },
+      // teardown doesn't race a dialog or hang on network. Close-protection
+      // tests opt into the real guard and stub the native dialogs themselves.
+      env: { ...process.env, MARKOVER_E2E_TEST: closeGuardEnabled ? '' : '1' },
     });
     await use(app);
+    if (closeGuardEnabled && app.windows().some((window) => !window.isClosed())) {
+      await app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows().forEach((window) => window.destroy());
+      });
+    }
     await app.close();
   },
-  page: async ({ electronApp }, use) => {
+  page: async ({ electronApp, closeGuardEnabled }, use) => {
     const page = await electronApp.firstWindow();
-    // Auto-dismiss any dialog the page surfaces (e.g. confirm()s, beforeunload
-    // prompts) so they don't race Playwright's session-close protocol.
-    page.on('dialog', (d) => { void d.dismiss(); });
+    // Electron handles beforeunload itself when testing the real close guard.
+    // Registering a listener stops Playwright from auto-dismissing that prompt.
+    page.on('dialog', (d) => {
+      if (!closeGuardEnabled || d.type() !== 'beforeunload') void d.dismiss();
+    });
     // Wait for the React app to mount
     await page.waitForSelector('.ProseMirror', { timeout: 15_000 });
     await use(page);

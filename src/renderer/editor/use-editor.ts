@@ -140,7 +140,7 @@ export function useMarkoverEditor() {
   });
 
   const loadContent = useCallback(
-    (rawMarkdown: string) => {
+    (rawMarkdown: string, { markClean = true }: { markClean?: boolean } = {}) => {
       if (!editor) return;
       isLoadingRef.current = true;
 
@@ -174,7 +174,7 @@ export function useMarkoverEditor() {
 
       if (tcStorage) tcStorage.enabled = tcWasEnabled;
       isLoadingRef.current = false;
-      setDirty(false);
+      if (markClean) setDirty(false);
     },
     [editor, setDirty],
   );

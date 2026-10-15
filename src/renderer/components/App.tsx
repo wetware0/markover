@@ -204,7 +204,7 @@ export function App() {
       rawSearchRef.current?.setQuery('', findReplaceStore.options);
       findReplaceStore.clearMatchState();
       // Raw → WYSIWYG: parse raw content back into editor
-      loadContent(rawContentRef.current);
+      loadContent(rawContentRef.current, { markClean: false });
       setComments(getMetadata().comments);
       setRawMode(false);
       if (findReplaceStore.isOpen && findReplaceStore.query) {
@@ -746,7 +746,7 @@ export function App() {
         }
         case 'save-and-close':
           await handleSave();
-          window.electronAPI.confirmClose();
+          if (!useEditorStore.getState().isDirty) window.electronAPI.confirmClose();
           break;
         case 'save': handleSave(); break;
         case 'save-as': handleSaveAs(); break;
@@ -961,7 +961,13 @@ export function App() {
               </button>
               <button
                 type="button"
-                onClick={async () => { await handleSave(); discardConfirm.onProceed(); setDiscardConfirm(null); }}
+                onClick={async () => {
+                  await handleSave();
+                  if (!useEditorStore.getState().isDirty) {
+                    discardConfirm.onProceed();
+                    setDiscardConfirm(null);
+                  }
+                }}
                 className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
               >
                 Save
