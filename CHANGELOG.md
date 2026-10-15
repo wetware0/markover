@@ -4,6 +4,25 @@ All notable changes to Markover are documented here.
 
 ---
 
+## [1.1.3](https://github.com/wetware0/markover/compare/v1.1.2...v1.1.3) - 2026-10-15
+
+### Fixed
+
+- Dollar amounts such as `$10.00 and $20.00` no longer turn into mathematical formulas. Currency symbols, ordinary spacing, percentages, and bold or italic formatting survive saving and reopening, including prices typed in the formatted editor. Genuine inline and block math still renders.
+- Table cells retain literal pipes, line breaks, currency ranges, and percentages in their original rows and columns after saving and reopening.
+- Literal numeric paragraph prefixes such as `2026.` and `2026)` remain ordinary text instead of becoming numbered lists after saving and reopening.
+- Switching between raw and formatted views no longer clears the unsaved-changes flag. Closing the window, opening another file, or creating a new document still prompts when edits have not been saved.
+- Canceling Save As or encountering a save error no longer discards edits or closes the window when saving from an unsaved-changes prompt.
+
+### Internal
+
+- Expanded `test.md` with numeric, currency, percentage, table, math, and save/reopen examples.
+- Added regression coverage for numeric rendering, Markdown serialization, unsaved changes, and the native window-close guard. Verification passed with 103 roundtrip tests and 41 Electron end-to-end tests.
+
+Fixes delivered in [PR #45](https://github.com/wetware0/markover/pull/45).
+
+---
+
 ## [1.1.2](https://github.com/wetware0/markover/compare/v1.1.1...v1.1.2) — 2026-06-14
 
 ### Security
