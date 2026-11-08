@@ -104,7 +104,7 @@ const SECTIONS: Section[] = [
     items: [
       { label: 'Standard markdown', description: 'Markover saves standard CommonMark-compatible .md files that open in any markdown editor.' },
       { label: 'Comment metadata', description: 'Comment threads are stored as HTML comments (<!-- markover:comment … -->) at the end of the file — invisible in other editors.' },
-      { label: 'Track-change marks', description: 'Insertions and deletions are stored as inline <span data-markov="ins/del"> tags — ignored by most markdown renderers.' },
+      { label: 'Track-change marks', description: 'Insertions and deletions are stored as inline <span data-markov="ins/del"> tags; whole-block changes and paragraph breaks use empty <div data-markov="block"> / <span data-markov="para"> markers. Most markdown renderers ignore them.' },
       { label: 'Publish', description: 'Use File > Publish to export a clean .md file with all metadata stripped and all tracked changes accepted.' },
     ],
   },

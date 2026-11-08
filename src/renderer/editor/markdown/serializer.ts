@@ -83,6 +83,7 @@ class MarkdownSerializerState {
 
   renderParagraph(node: Node) {
     const inner = new MarkdownSerializerState();
+    inner.write(paragraphChangeMarkers(node));
     inner.renderInlineContent(node);
     // Literal numeric prefixes must not become ordered-list markers on reload.
     this.write(inner.getOutput().replace(/^([ \t]{0,3}\d{1,9})([.)])(?=[ \t]|$)/gm, '$1\\$2'));
@@ -194,8 +195,11 @@ class MarkdownSerializerState {
         pendingMarks = unit.marks;
       } else {
         flushText();
-        // For inline leaf nodes (hardBreak, katexInline, etc.) close all marks first
-        transitionTo([]);
+        // Inline leaf nodes (hardBreak, katexInline, image, footnoteRef) cannot
+        // sit inside Markdown formatting, so close every other mark first. The
+        // collaboration marks are HTML spans and may wrap them: a tracked or
+        // commented math/image/footnote keeps its markup on save.
+        transitionTo(unit.node.marks.filter(isCollaborationMark));
         const handler = nodeHandlers[unit.node.type.name];
         if (unit.node.isLeaf && handler) {
           handler(this, unit.node, node, 0);
@@ -246,7 +250,7 @@ class MarkdownSerializerState {
     node.forEach((child) => {
       // Skip empty paragraphs — these are artifacts left when ProseMirror extracts
       // block-level nodes (e.g. images) out of their <p> wrapper during parsing.
-      if (child.type.name === 'paragraph' && child.childCount === 0) return;
+      if (isEmptyArtifactParagraph(child)) return;
 
       if (child.type.name === 'paragraph') {
         if (!first) {
@@ -308,12 +312,55 @@ function cellChangeMarkers(cell: Node): string {
   return out;
 }
 
+interface ChangeAttr { changeId: string; author: string; date: string; ws?: string }
+
+function changeMarker(tag: 'div' | 'span', kind: string, op: string, change: ChangeAttr): string {
+  const ws = change.ws ? ` data-ws="${escapeHtmlAttr(change.ws).replace(/\t/g, '&#9;').replace(/\n/g, '&#10;')}"` : '';
+  return `<${tag} data-markov="${kind}" data-op="${op}" data-change-id="${escapeHtmlAttr(change.changeId)}" data-author="${escapeHtmlAttr(change.author)}" data-date="${escapeHtmlAttr(change.date)}"${ws}></${tag}>`;
+}
+
+/**
+ * Tracked insert/delete of a whole code, math or Mermaid block (or rule): an
+ * HTML marker line before it. See src/renderer/editor/extensions/block-changes.ts.
+ */
+function blockChangeMarkers(node: Node): string {
+  const lines: string[] = [];
+  for (const [op, attr] of [['ins', 'markovInsert'], ['del', 'markovDelete']] as const) {
+    const change = node.attrs[attr] as ChangeAttr | null | undefined;
+    if (change) lines.push(changeMarker('div', 'block', op, change));
+  }
+  return lines.length ? lines.join('\n') + '\n\n' : '';
+}
+
+/** Tracked paragraph break before a paragraph/heading: marker span at its start. */
+function paragraphChangeMarkers(node: Node): string {
+  let out = '';
+  for (const [op, attr] of [['split', 'markovSplit'], ['join', 'markovJoin']] as const) {
+    const change = node.attrs[attr] as ChangeAttr | null | undefined;
+    if (change) out += changeMarker('span', 'para', op, change);
+  }
+  return out;
+}
+
+/**
+ * Empty paragraphs are parse artifacts (block images extracted from <p>) and
+ * are skipped, unless they carry a tracked paragraph break (Enter on an empty
+ * line), which must survive save.
+ */
+function isEmptyArtifactParagraph(node: Node): boolean {
+  return node.type.name === 'paragraph' && node.childCount === 0 && !node.attrs.markovSplit && !node.attrs.markovJoin;
+}
+
+function isCollaborationMark(mark: Mark): boolean {
+  return mark.type.name === 'markovInsert' || mark.type.name === 'markovDelete' || mark.type.name === 'markovHighlight';
+}
+
 const nodeHandlers: Record<string, NodeHandler> = {
   doc(state, node) {
     node.forEach((child, _offset, index) => {
       // Skip empty paragraphs that ProseMirror leaves behind when block-level
       // nodes (e.g. images) are extracted from their <p> wrapper during parsing.
-      if (child.type.name === 'paragraph' && child.childCount === 0) return;
+      if (isEmptyArtifactParagraph(child)) return;
       state.renderNode(child, node, index);
     });
   },
@@ -330,7 +377,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
 
   heading(state, node) {
     const level = node.attrs.level as number;
-    state.write('#'.repeat(level) + ' ');
+    state.write('#'.repeat(level) + ' ' + paragraphChangeMarkers(node));
     state.renderInlineContent(node);
     state.closeBlock();
   },
@@ -407,6 +454,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
   },
 
   codeBlock(state, node) {
+    state.write(blockChangeMarkers(node));
     const language = (node.attrs.language as string) || '';
     const content = node.textContent;
     // Use a fence longer than any backtick run inside the content
@@ -435,7 +483,8 @@ const nodeHandlers: Record<string, NodeHandler> = {
     state.closeBlock();
   },
 
-  horizontalRule(state) {
+  horizontalRule(state, node) {
+    state.write(blockChangeMarkers(node));
     state.write('---');
     state.closeBlock();
   },
@@ -461,6 +510,8 @@ const nodeHandlers: Record<string, NodeHandler> = {
       const srcStr = /\s/.test(src) ? `<${src}>` : src;
       imageStr = `![${alt}](${srcStr}${title ? ` "${title}"` : ''})`;
     }
+
+    if (node.isBlock) state.write(blockChangeMarkers(node));
 
     // Wrap in link syntax when the image was originally [![alt](src)](href)
     if (href) {
@@ -532,6 +583,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
   },
 
   katexBlock(state, node) {
+    state.write(blockChangeMarkers(node));
     state.write('$$\n');
     state.write(node.attrs.math);
     state.ensureNewLine();
@@ -541,6 +593,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
 
   // Mermaid
   mermaidBlock(state, node) {
+    state.write(blockChangeMarkers(node));
     state.write('```mermaid\n');
     state.write(node.attrs.code);
     state.ensureNewLine();
