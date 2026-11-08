@@ -110,6 +110,7 @@
     "esbuild": "^0.28.1",
     "linkify-it": "^5.0.2",
     "prosemirror-view": "^1.42.3",
-    "katex": "$katex"
+    "katex": "$katex",
+    "prosemirror-transform": "^1.12.5"
   }
 }
