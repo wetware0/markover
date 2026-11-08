@@ -4,7 +4,7 @@ All notable changes to Markover are documented here.
 
 ---
 
-## [1.1.5](https://github.com/wetware0/markover/compare/v1.1.4...v1.1.5) - 2026-11-08
+## [1.1.6](https://github.com/wetware0/markover/compare/v1.1.5...v1.1.6) - 2026-11-08
 
 ### Added
 
@@ -14,14 +14,27 @@ All notable changes to Markover are documented here.
   - Whole code, math and Mermaid blocks, images and horizontal rules: deleting one keeps it in place marked deleted; inserting one marks it inserted. Editing a math or Mermaid block from its editor shows the old version deleted and the new one inserted. Each appears in the Changes panel by kind (e.g. "[Math block] x^2").
 - Cutting commented text and pasting it elsewhere in the document keeps its comment. Copy and paste still drops the highlight from the copy, so a comment never has two live anchors.
 
+### Fixed
+
+- Tracked insertions and deletions of inline math, footnote references and images now keep their change markup (and comment highlights) when saved; previously only the surrounding text did, so reopening the file lost the tracked state of the atom.
+- Typing with an IME (Japanese, Chinese, Korean input) while tracking no longer leaves stray characters when composing over a selection. Edits made during a composition are tracked as one change when it ends.
+
+### Internal
+
+- Block-level change state lives on node attributes (`markovInsert`/`markovDelete` on code, math, Mermaid, image and rule nodes; `markovSplit`/`markovJoin` on paragraphs and headings), added by `extensions/block-changes.ts` and persisted as `<div data-markov="block">` marker lines and `<span data-markov="para">` markers. Added 26 headless cases (atoms, blocks, splits/joins, IME net change, cut/paste comments) and `tests/e2e/track-changes-structure.spec.ts`, including IME composition through CDP `Input.imeSetComposition`.
+
+---
+
+## [1.1.5](https://github.com/wetware0/markover/compare/v1.1.4...v1.1.5) - 2026-11-08
+
+### Added
+
 - **Table structure is tracked.** With track changes on, inserted rows, columns and tables are highlighted as one insertion, and deleted rows, columns and tables stay in place struck through as one deletion until accepted. Each appears as a single entry in the Changes panel (labelled row/column/table) with its own Accept/Reject, and pending table changes survive save and reopen. Moving rows or columns is unavailable while tracking.
 - Clicking a change in the Changes sidebar selects it in the document. Clicking commented text opens and highlights its thread; moving the caret into commented text makes that thread active.
 - Comment threads whose text has been deleted stay in the sidebar marked *text deleted* (and are kept on save) instead of silently losing their anchor. Reopening such a file no longer reports a collaboration-data error.
 
 ### Fixed
 
-- Tracked insertions and deletions of inline math, footnote references and images now keep their change markup (and comment highlights) when saved; previously only the surrounding text did, so reopening the file lost the tracked state of the atom.
-- Typing with an IME (Japanese, Chinese, Korean input) while tracking no longer leaves stray characters when composing over a selection. Edits made during a composition are tracked as one change when it ends.
 - **Tracked edits now coalesce the way they do in Word.** Contiguous typing by the same author is one insertion however slowly you type, including after typo corrections, cursor moves, and returning to the edge of your own insertion. Backspacing or forward-deleting over a word is one deletion. Deleting your own pending insertion removes it outright, and typing over a selection reads as one deletion followed by one insertion. Different authors' changes stay separate.
 - Backspacing repeatedly with tracking on no longer erases the struck-through text on every second keystroke; the caret now steps over deleted text and extends the deletion.
 - Typing inside an existing tracked insertion or deletion no longer duplicates characters or stacks two change marks on the same text.
@@ -38,7 +51,6 @@ All notable changes to Markover are documented here.
 
 ### Internal
 
-- Block-level change state lives on node attributes (`markovInsert`/`markovDelete` on code, math, Mermaid, image and rule nodes; `markovSplit`/`markovJoin` on paragraphs and headings), added by `extensions/block-changes.ts` and persisted as `<div data-markov="block">` marker lines and `<span data-markov="para">` markers. Added 26 headless cases (atoms, blocks, splits/joins, IME net change, cut/paste comments) and `tests/e2e/track-changes-structure.spec.ts`, including IME composition through CDP `Input.imeSetComposition`.
 - Track-changes logic is now a pure `trackTransactions` function plus `track-changes-ops.ts` (collect, accept/reject, publish), so the headless suite drives the real plugin with prosemirror-history. Added 42 behaviour cases to `scripts/roundtrip-test.ts` and new Playwright specs for slow-typing coalescing, table row/column/table insert and delete with accept/reject, word deletion, undo, accept/reject, save/reopen, and comment flows.
 - New end-to-end coverage for rich content: a file with a table (alignment, inline formatting, escaped pipes, links), a local image, a Mermaid diagram with math in a node, and inline and block math is opened, checked, edited, saved, reopened and saved again with byte-identical output.
 - New end-to-end coverage for table editing: insert rows above and below, insert columns before and after, delete a row, delete a column and delete the whole table, checking the saved Markdown after each step.
