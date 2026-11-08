@@ -288,7 +288,24 @@ function serializeTableCell(cell: Node): string {
   const inner = new MarkdownSerializerState();
   inner.renderInlineContent(cell.firstChild || cell);
   // A Markdown table row must stay on one source line, including code/math cells.
-  return inner.getOutput().trim().replace(/ *\n/g, '<br>').replace(/\|/g, '\\|');
+  const text = inner.getOutput().trim().replace(/ *\n/g, '<br>').replace(/\|/g, '\\|');
+  return cellChangeMarkers(cell) + text;
+}
+
+/**
+ * Tracked table structure (inserted/deleted rows, columns, tables) lives on
+ * cell attributes; persist it as empty marker spans at the start of the cell.
+ * See src/renderer/editor/extensions/table-cells.ts.
+ */
+function cellChangeMarkers(cell: Node): string {
+  let out = '';
+  for (const [op, attr] of [['ins', 'markovInsert'], ['del', 'markovDelete']] as const) {
+    const change = cell.attrs[attr] as { changeId: string; author: string; date: string } | null | undefined;
+    if (!change) continue;
+    const esc = (v: unknown) => escapeHtmlAttr(v).replace(/\|/g, '&#124;');
+    out += `<span data-markov="cell" data-op="${op}" data-change-id="${esc(change.changeId)}" data-author="${esc(change.author)}" data-date="${esc(change.date)}"></span>`;
+  }
+  return out;
 }
 
 const nodeHandlers: Record<string, NodeHandler> = {
@@ -557,6 +574,15 @@ const nodeHandlers: Record<string, NodeHandler> = {
 
 // --- Mark Wrappers ---
 
+/** Attribute values (author names especially) may contain quotes or angle brackets. */
+function escapeHtmlAttr(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function getMarkWrapper(mark: Mark): { open: string; close: string } | null {
   switch (mark.type.name) {
     case 'bold':
@@ -588,17 +614,17 @@ function getMarkWrapper(mark: Mark): { open: string; close: string } | null {
     }
     case 'markovHighlight':
       return {
-        open: `<span data-markov="hl" data-comment-id="${mark.attrs.commentId}">`,
+        open: `<span data-markov="hl" data-comment-id="${escapeHtmlAttr(mark.attrs.commentId)}">`,
         close: `</span>`,
       };
     case 'markovInsert':
       return {
-        open: `<span data-markov="ins" data-change-id="${mark.attrs.changeId}" data-author="${mark.attrs.author}" data-date="${mark.attrs.date}">`,
+        open: `<span data-markov="ins" data-change-id="${escapeHtmlAttr(mark.attrs.changeId)}" data-author="${escapeHtmlAttr(mark.attrs.author)}" data-date="${escapeHtmlAttr(mark.attrs.date)}">`,
         close: `</span>`,
       };
     case 'markovDelete':
       return {
-        open: `<span data-markov="del" data-change-id="${mark.attrs.changeId}" data-author="${mark.attrs.author}" data-date="${mark.attrs.date}">`,
+        open: `<span data-markov="del" data-change-id="${escapeHtmlAttr(mark.attrs.changeId)}" data-author="${escapeHtmlAttr(mark.attrs.author)}" data-date="${escapeHtmlAttr(mark.attrs.date)}">`,
         close: `</span>`,
       };
     default:

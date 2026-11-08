@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -297,6 +296,27 @@
   color: #991b1b;
   text-decoration: line-through;
   text-decoration-color: #ef4444;
+}
+
+/* Track changes: table structure (inserted/deleted rows, columns, tables) */
+.ProseMirror td.markover-cell-insert,
+.ProseMirror th.markover-cell-insert {
+  background-color: rgba(34, 197, 94, 0.18);
+  box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.6);
+}
+
+.ProseMirror td.markover-cell-delete,
+.ProseMirror th.markover-cell-delete {
+  background-color: rgba(239, 68, 68, 0.12);
+  box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.55);
+  color: #991b1b;
+  text-decoration: line-through;
+  text-decoration-color: #ef4444;
+}
+
+.dark .ProseMirror td.markover-cell-delete,
+.dark .ProseMirror th.markover-cell-delete {
+  color: #fca5a5;
 }
 
 /* Dark mode: ProseMirror overrides */

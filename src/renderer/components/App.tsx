@@ -8,6 +8,18 @@ import { useUserStore, getAuthorName } from '../store/user-store';
 import { UserSettingsDialog } from '../ui/UserSettingsDialog';
 import { useCommentsStore } from '../collaboration/comments/comment-store';
 import { useTrackChangesStore } from '../collaboration/track-changes/track-changes-store';
+import {
+  anchoredCommentIds,
+  changeRange,
+  collectChanges,
+  commentIdAt,
+  commentRange,
+  publishDoc,
+  resolveChanges,
+} from '../collaboration/track-changes/track-changes-ops';
+import { markdownToHtml } from '../editor/markdown/parser';
+import { prosemirrorToMarkdown } from '../editor/markdown/serializer';
+import { DOMParser as PMDOMParser } from '@tiptap/pm/model';
 import { useThemeStore } from '../store/theme-store';
 import { useZoomStore } from '../store/zoom-store';
 import { Toolbar } from '../ui/toolbar/Toolbar';
@@ -38,6 +50,17 @@ import { isProtectedOrForbidden, offerWriteFallback, notifyWriteFailed } from '.
 
 type SidebarTab = 'comments' | 'changes';
 
+/**
+ * Focus the editor synchronously. TipTap's `focus()` command defers to
+ * requestAnimationFrame and then writes ProseMirror's selection back into the
+ * DOM; a keystroke that lands in between (or a throttled frame in a background
+ * window) is silently undone. Our callers have already dispatched their
+ * selection, so focusing now is safe and keeps the next key press intact.
+ */
+function focusEditorNow(editor: { isDestroyed: boolean; view: { focus: () => void } }) {
+  if (!editor.isDestroyed) editor.view.focus();
+}
+
 interface PendingComment {
   from: number;
   to: number;
@@ -57,7 +80,10 @@ export function App() {
   const { editor, loadContent, getMarkdown, getMetadata, setMetadata } = useMarkoverEditor();
   const { filePath, isDirty, setFile, setDirty, isRawMode, setRawMode, fileName } = useEditorStore();
   const { setComments, comments, addComment, deleteComment: removeComment } = useCommentsStore();
-  const { enabled: trackChangesEnabled, setEnabled: setTrackChangesEnabled, changes, setChanges, removeChange } = useTrackChangesStore();
+  const { enabled: trackChangesEnabled, setEnabled: setTrackChangesEnabled, changes, setChanges } = useTrackChangesStore();
+  // Comment ids whose highlighted text still exists; threads not in here are
+  // shown as detached rather than silently dropped.
+  const [anchoredComments, setAnchoredComments] = useState<ReadonlySet<string>>(new Set());
   const { resolved: resolvedTheme } = useThemeStore();
   const { name: userName, setName } = useUserStore();
   const { zoomLevel, zoomIn, zoomOut, resetZoom } = useZoomStore();
@@ -149,13 +175,16 @@ export function App() {
   }, [isDirty]);
 
   // Helper: if dirty, show confirmation dialog before proceeding
+  // Reads the store at call time: menu actions arrive through a subscription
+  // that is only re-registered after React re-renders, so a closure over
+  // `isDirty` can be stale right after a save completes.
   const guardDirty = useCallback((message: string, onProceed: () => void) => {
-    if (isDirty) {
+    if (useEditorStore.getState().isDirty) {
       setDiscardConfirm({ message, onProceed });
     } else {
       onProceed();
     }
-  }, [isDirty]);
+  }, []);
 
   // Sync user name to comments store and track changes plugin
   useEffect(() => {
@@ -302,29 +331,28 @@ export function App() {
   }, [isRawMode, getMarkdown, setFile, setDirty, syncCommentsToMetadata]);
 
   const handlePublish = useCallback(async () => {
-    let rawMd: string;
+    if (!editor) return;
+    // Work on the document model rather than regex-stripping spans: tracked
+    // changes and comment highlights nest (a comment over an insertion, a
+    // deletion containing bold text), which a non-greedy regex cannot unwrap.
+    let doc = editor.state.doc;
+    let cspellIgnores = getMetadata().cspellIgnores;
     if (isRawMode) {
-      rawMd = rawContentRef.current;
-    } else {
-      syncCommentsToMetadata();
-      rawMd = getMarkdown();
+      const { cleanMarkdown, metadata } = parseMarkoverFile(rawContentRef.current);
+      const container = document.createElement('div');
+      container.innerHTML = markdownToHtml(cleanMarkdown);
+      doc = PMDOMParser.fromSchema(editor.schema).parse(container);
+      cspellIgnores = metadata.cspellIgnores;
     }
-    // Strip markover comment blocks; extract cspell ignores
-    const { cleanMarkdown, metadata } = parseMarkoverFile(rawMd);
-    // Accept insertions (keep text), remove comment highlights (keep text)
-    let published = cleanMarkdown.replace(
-      /<span data-markov="(?:ins|hl)"[^>]*>([\s\S]*?)<\/span>/g,
-      '$1',
-    );
-    // Accept deletions (remove text)
-    published = published.replace(/<span data-markov="del"[^>]*>[\s\S]*?<\/span>/g, '');
+    // Accept every change, drop every highlight; comment threads are not emitted.
+    let published = prosemirrorToMarkdown(publishDoc(doc));
     // Preserve cspell:ignore words in the published file
-    if (metadata.cspellIgnores.length > 0) {
-      const deduped = [...new Set(metadata.cspellIgnores)];
+    if (cspellIgnores.length > 0) {
+      const deduped = [...new Set(cspellIgnores)];
       published = `<!-- cspell:ignore ${deduped.join(' ')} -->\n\n` + published;
     }
     await window.electronAPI.saveFileAs(published);
-  }, [isRawMode, getMarkdown, syncCommentsToMetadata]);
+  }, [editor, isRawMode, getMetadata]);
 
   const doNew = useCallback(() => {
     if (isRawMode) { rawContentRef.current = ''; setRawMode(false); }
@@ -358,7 +386,8 @@ export function App() {
   const handleSubmitComment = useCallback(() => {
     if (!editor || !pendingComment || !commentText.trim()) return;
     const { from, to, commentId } = pendingComment;
-    editor.chain().focus().setTextSelection({ from, to }).setMarkovHighlight({ commentId }).run();
+    editor.chain().setTextSelection({ from, to }).setMarkovHighlight({ commentId }).run();
+    focusEditorNow(editor);
     addComment(commentId, commentText.trim());
     setPendingComment(null);
     setCommentText('');
@@ -369,171 +398,95 @@ export function App() {
   const handleCancelComment = useCallback(() => {
     setPendingComment(null);
     setCommentText('');
-    editor?.chain().focus().run();
+    if (editor) focusEditorNow(editor);
   }, [editor]);
+
+  // Return focus to the editor after a sidebar action so the next keystroke
+  // lands in the document (see CLAUDE.md: toolbar callbacks must refocus).
+  const focusEditor = useCallback(() => { if (editor) focusEditorNow(editor); }, [editor]);
 
   // Delete comment
   const handleDeleteComment = useCallback(
     (commentId: string) => {
       if (!editor) return;
-      editor.chain().focus().unsetMarkovHighlight(commentId).run();
+      editor.chain().unsetMarkovHighlight(commentId).run();
+      focusEditorNow(editor);
       removeComment(commentId);
     },
     [editor, removeComment],
   );
 
-  // Navigate to comment
+  // Navigate to comment: select its highlighted text and bring it into view.
   const handleNavigateToComment = useCallback(
     (commentId: string) => {
       if (!editor) return;
-      const { doc } = editor.state;
-      let targetPos: number | null = null;
-      doc.descendants((node, pos) => {
-        if (targetPos !== null) return false;
-        if (!node.isText) return;
-        const mark = node.marks.find(
-          (m) => m.type.name === 'markovHighlight' && m.attrs.commentId === commentId,
-        );
-        if (mark) { targetPos = pos; return false; }
-      });
-      if (targetPos !== null) {
-        editor.chain().focus().setTextSelection(targetPos).run();
+      const range = commentRange(editor.state.doc, commentId);
+      if (!range) {
+        toast.info('The text this comment referred to has been deleted.');
+        return;
       }
+      editor.chain().setTextSelection(range).scrollIntoView().run();
+      focusEditorNow(editor);
     },
     [editor],
   );
 
-  // Accept a tracked change
-  const handleAcceptChange = useCallback(
+  // Accept / reject tracked changes. Each call is one transaction, so a single
+  // Ctrl+Z undoes an Accept All.
+  const applyChangeResolution = useCallback(
+    (ids: ReadonlySet<string> | null, action: 'accept' | 'reject') => {
+      if (!editor) return;
+      const tr = resolveChanges(editor.state, ids, action);
+      if (tr.docChanged) editor.view.dispatch(tr.scrollIntoView());
+      focusEditorNow(editor);
+    },
+    [editor],
+  );
+  const handleAcceptChange = useCallback((id: string) => applyChangeResolution(new Set([id]), 'accept'), [applyChangeResolution]);
+  const handleRejectChange = useCallback((id: string) => applyChangeResolution(new Set([id]), 'reject'), [applyChangeResolution]);
+  const handleAcceptAll = useCallback(() => applyChangeResolution(null, 'accept'), [applyChangeResolution]);
+  const handleRejectAll = useCallback(() => applyChangeResolution(null, 'reject'), [applyChangeResolution]);
+
+  const handleNavigateToChange = useCallback(
     (changeId: string) => {
       if (!editor) return;
-      const change = changes.find((c) => c.id === changeId);
-      if (!change) return;
-
-      if (change.type === 'insertion') {
-        // Accept insertion: remove the mark, keep the text
-        editor.chain().focus().unsetMarkovInsert(changeId).run();
-      } else {
-        // Accept deletion: remove the struck-through content entirely
-        const { doc } = editor.state;
-        const tr = editor.state.tr;
-        tr.setMeta('trackChangesProcessed', true);
-        const positions: Array<{ from: number; to: number }> = [];
-        doc.descendants((node, pos) => {
-          if (!node.isText) return;
-          const mark = node.marks.find(
-            (m) => m.type.name === 'markovDelete' && m.attrs.changeId === changeId,
-          );
-          if (mark) positions.push({ from: pos, to: pos + node.nodeSize });
-        });
-        if (positions.length > 0) {
-          // If all marked text sits within the same non-paragraph top-level block
-          // (table, code block, etc.), delete that whole block node rather than
-          // just the text inside it — otherwise an empty shell would be left behind.
-          const BLOCK_TYPES = new Set(['table', 'codeBlock', 'blockquote', 'bulletList', 'orderedList', 'taskList']);
-          const topLevelNodes = positions.map((p) => doc.resolve(p.from).node(1));
-          const firstTopLevel = topLevelNodes[0];
-          const isSingleBlock = topLevelNodes.every((n) => n === firstTopLevel);
-          const isBlockDeletion = isSingleBlock && BLOCK_TYPES.has(firstTopLevel.type.name);
-
-          if (isBlockDeletion) {
-            const $pos = doc.resolve(positions[0].from);
-            tr.delete($pos.before(1), $pos.after(1));
-          } else {
-            for (let i = positions.length - 1; i >= 0; i--) {
-              tr.delete(positions[i].from, positions[i].to);
-            }
-          }
-          editor.view.dispatch(tr);
-        }
-      }
-      removeChange(changeId);
+      const range = changeRange(editor.state.doc, changeId);
+      if (range) editor.chain().setTextSelection(range).scrollIntoView().run();
+      focusEditorNow(editor);
     },
-    [editor, changes, removeChange],
+    [editor],
   );
 
-  // Reject a tracked change
-  const handleRejectChange = useCallback(
-    (changeId: string) => {
-      if (!editor) return;
-      const change = changes.find((c) => c.id === changeId);
-      if (!change) return;
-
-      if (change.type === 'insertion') {
-        // Reject insertion: remove the inserted text entirely
-        const { doc } = editor.state;
-        const tr = editor.state.tr;
-        tr.setMeta('trackChangesProcessed', true);
-        const positions: Array<{ from: number; to: number }> = [];
-        doc.descendants((node, pos) => {
-          if (!node.isText) return;
-          const mark = node.marks.find(
-            (m) => m.type.name === 'markovInsert' && m.attrs.changeId === changeId,
-          );
-          if (mark) positions.push({ from: pos, to: pos + node.nodeSize });
-        });
-        for (let i = positions.length - 1; i >= 0; i--) {
-          tr.delete(positions[i].from, positions[i].to);
-        }
-        if (positions.length > 0) editor.view.dispatch(tr);
-      } else {
-        // Reject deletion: remove the mark, keep the text (un-delete)
-        editor.chain().focus().unsetMarkovDelete(changeId).run();
-      }
-      removeChange(changeId);
-    },
-    [editor, changes, removeChange],
-  );
-
-  // Accept/reject all
-  const handleAcceptAll = useCallback(() => {
-    changes.forEach((c) => handleAcceptChange(c.id));
-  }, [changes, handleAcceptChange]);
-
-  const handleRejectAll = useCallback(() => {
-    [...changes].reverse().forEach((c) => handleRejectChange(c.id));
-  }, [changes, handleRejectChange]);
-
-  // Scan editor for tracked change marks to populate the changes list
+  // Derive the change list and comment anchors from the document on every
+  // update (marks are the single source of truth; the stores mirror them).
   useEffect(() => {
     if (!editor) return;
 
+    let lastAnchors = '';
     const scan = () => {
-      const found: Array<{ id: string; type: 'insertion' | 'deletion'; author: string; date: string; text: string }> = [];
-      const seen = new Set<string>();
+      setChanges(collectChanges(editor.state.doc));
+      const anchors = anchoredCommentIds(editor.state.doc);
+      const key = [...anchors].sort().join('|');
+      if (key !== lastAnchors) {
+        lastAnchors = key;
+        setAnchoredComments(anchors);
+      }
+    };
 
-      editor.state.doc.descendants((node, _pos) => {
-        if (!node.isText) return;
-        for (const mark of node.marks) {
-          if (mark.type.name === 'markovInsert' && !seen.has(mark.attrs.changeId)) {
-            seen.add(mark.attrs.changeId);
-            found.push({
-              id: mark.attrs.changeId,
-              type: 'insertion',
-              author: mark.attrs.author,
-              date: mark.attrs.date,
-              text: node.text || '',
-            });
-          }
-          if (mark.type.name === 'markovDelete' && !seen.has(mark.attrs.changeId)) {
-            seen.add(mark.attrs.changeId);
-            found.push({
-              id: mark.attrs.changeId,
-              type: 'deletion',
-              author: mark.attrs.author,
-              date: mark.attrs.date,
-              text: node.text || '',
-            });
-          }
-        }
-      });
-
-      setChanges(found);
+    // Caret inside commented text → that thread becomes active in the sidebar.
+    const syncActiveComment = () => {
+      const id = commentIdAt(editor.state.doc, editor.state.selection.from);
+      const store = useCommentsStore.getState();
+      if (id !== store.activeCommentId) store.setActiveComment(id);
     };
 
     editor.on('update', scan);
+    editor.on('selectionUpdate', syncActiveComment);
     scan(); // Initial scan
-    return () => { editor.off('update', scan); };
+    return () => {
+      editor.off('update', scan);
+      editor.off('selectionUpdate', syncActiveComment);
+    };
   }, [editor, setChanges]);
 
   // Listen for dblclick-to-edit events from KaTeX / Mermaid node views
@@ -590,6 +543,14 @@ export function App() {
 
   // Handle link clicks inside the editor
   const handleEditorClick = useCallback((e: React.MouseEvent) => {
+    // Clicking commented text opens its thread in the sidebar.
+    const highlight = (e.target as HTMLElement).closest('[data-markov="hl"]');
+    const commentId = highlight?.getAttribute('data-comment-id');
+    if (commentId) {
+      useCommentsStore.getState().setActiveComment(commentId);
+      setSidebarOpen(true);
+      setSidebarTab('comments');
+    }
     const anchor = (e.target as HTMLElement).closest('a');
     if (!anchor) return;
     const href = anchor.getAttribute('href');
@@ -683,11 +644,9 @@ export function App() {
         setGithubSource(null);
         const meta = getMetadata();
         const { cleanMarkdown } = parseMarkoverFile(data.content);
-        const structuralProblems = validateMetadata(meta, cleanMarkdown.length).length;
-        const danglingComments = meta.comments.filter(
-          (c) => !data.content.includes(`data-comment-id="${c.id}"`),
-        ).length;
-        const problemCount = structuralProblems + danglingComments;
+        // A comment thread without highlighted text is not corruption: its
+        // text was deleted. The sidebar lists it as detached.
+        const problemCount = validateMetadata(meta, cleanMarkdown.length).length;
         if (problemCount > 0) {
           toast.error(`This file's collaboration data had ${problemCount} issue(s) and may display incompletely.`);
         }
@@ -722,11 +681,8 @@ export function App() {
               setGithubSource(null);
               const meta = getMetadata();
               const { cleanMarkdown } = parseMarkoverFile(data.content);
-              const structuralProblems = validateMetadata(meta, cleanMarkdown.length).length;
-              const danglingComments = meta.comments.filter(
-                (c) => !data.content.includes(`data-comment-id="${c.id}"`),
-              ).length;
-              const problemCount = structuralProblems + danglingComments;
+              // Detached comment threads (text deleted) are listed in the sidebar.
+              const problemCount = validateMetadata(meta, cleanMarkdown.length).length;
               if (problemCount > 0) {
                 toast.error(`This file's collaboration data had ${problemCount} issue(s) and may display incompletely.`);
               }
@@ -837,7 +793,7 @@ export function App() {
         isRawMode={isRawMode}
         onToggleRawMode={handleToggleRawMode}
         onAddComment={handleAddComment}
-        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        onToggleSidebar={() => { setSidebarOpen(!sidebarOpen); if (editor) focusEditorNow(editor); }}
         trackChangesEnabled={trackChangesEnabled}
         onToggleTrackChanges={() => {
           const next = !trackChangesEnabled;
@@ -875,6 +831,7 @@ export function App() {
             <div className="flex items-center border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setSidebarTab('comments')}
                 className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
                   sidebarTab === 'comments'
@@ -886,6 +843,7 @@ export function App() {
               </button>
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setSidebarTab('changes')}
                 className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
                   sidebarTab === 'changes'
@@ -902,6 +860,7 @@ export function App() {
               </button>
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setSidebarOpen(false)}
                 className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded mr-1"
               >
@@ -912,16 +871,19 @@ export function App() {
             {/* Tab content */}
             {sidebarTab === 'comments' ? (
               <CommentsPanel
+                anchoredCommentIds={anchoredComments}
                 onNavigateToComment={handleNavigateToComment}
                 onDeleteComment={handleDeleteComment}
+                onAfterAction={focusEditor}
               />
             ) : (
               <TrackChangesPanel
-                editor={editor}
                 onAcceptChange={handleAcceptChange}
                 onRejectChange={handleRejectChange}
                 onAcceptAll={handleAcceptAll}
                 onRejectAll={handleRejectAll}
+                onNavigateToChange={handleNavigateToChange}
+                onAfterAction={focusEditor}
               />
             )}
           </div>
