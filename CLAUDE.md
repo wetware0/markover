@@ -99,7 +99,7 @@ Publish workflow:
 
 ## Progress Tracking
 
-See `progress.json` for task status across all phases. Update it when completing or starting work.
+Work is tracked in [GitHub issues](https://github.com/wetware0/markover/issues). Parked ideas live in epics titled "(parked)", e.g. #48; don't start work from them without a named user asking.
 
 ## Tech Stack
 
