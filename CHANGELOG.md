@@ -4,7 +4,7 @@ All notable changes to Markover are documented here.
 
 ---
 
-## Unreleased
+## [1.1.7](https://github.com/wetware0/markover/compare/v1.1.6...v1.1.7) - 2026-11-09
 
 ### Added
 
