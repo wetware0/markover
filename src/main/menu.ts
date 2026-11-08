@@ -1,6 +1,7 @@
 import { Menu, BrowserWindow, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { IPC_CHANNELS } from '../shared/types/ipc';
+import { promptToSetDefault } from './file-association';
 
 export function buildMenu(
   window: BrowserWindow,
@@ -75,6 +76,12 @@ export function buildMenu(
           click: () => sendAction('publish'),
         },
         { type: 'separator' },
+        ...(process.platform === 'win32'
+          ? [
+              { label: 'Open Markdown Files with Markover...', click: () => void promptToSetDefault(window) },
+              { type: 'separator' } as MenuItemConstructorOptions,
+            ]
+          : []),
         { role: 'quit' },
       ],
     },
