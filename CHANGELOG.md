@@ -4,6 +4,19 @@ All notable changes to Markover are documented here.
 
 ---
 
+## Unreleased
+
+### Fixed
+
+- **Math now renders with KaTeX's own fonts.** The KaTeX font files were never bundled into the app, so formulas fell back to system fonts: integral signs were tiny and limits were misplaced. This affected every earlier release.
+
+### Internal
+
+- New end-to-end coverage for rich content: a file with a table (alignment, inline formatting, escaped pipes, links), a local image, a Mermaid diagram with math in a node, and inline and block math is opened, checked, edited, saved, reopened and saved again with byte-identical output.
+- New end-to-end coverage for table editing: insert rows above and below, insert columns before and after, delete a row, delete a column and delete the whole table, checking the saved Markdown after each step.
+
+---
+
 ## [1.1.4](https://github.com/wetware0/markover/compare/v1.1.3...v1.1.4) - 2026-11-08
 
 ### Security
