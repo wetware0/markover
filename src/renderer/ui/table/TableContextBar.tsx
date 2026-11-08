@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Editor } from '@tiptap/core';
 import { moveTableColumn, moveTableRow, selectedRect } from 'prosemirror-tables';
+import { useTrackChangesStore } from '../../collaboration/track-changes/track-changes-store';
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
@@ -27,19 +28,24 @@ function Btn({
   children,
   danger,
   active,
+  disabled,
 }: {
   onClick: () => void;
   title: string;
   children: React.ReactNode;
   danger?: boolean;
   active?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
+      // Keep the caret in the table cell: the commands act on the selection.
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       title={title}
-      className={`p-1 rounded transition-colors ${
+      disabled={disabled}
+      className={`p-1 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
         danger
           ? 'text-red-500 hover:bg-red-100 dark:hover:bg-red-950'
           : active
@@ -102,7 +108,11 @@ function rowCount(editor: Editor): number {
 }
 
 export function TableContextBar({ editor }: Props) {
+  // Moving rows/columns rewrites the table; it can't be shown as a reviewable
+  // change, so it is unavailable while tracking (insert/delete are tracked).
+  const tracking = useTrackChangesStore((s) => s.enabled);
   if (!editor.isActive('table')) return null;
+  const moveNote = tracking ? ' (unavailable while tracking changes)' : '';
 
   const sz = 14;
   const align = currentColAlign(editor);
@@ -120,13 +130,15 @@ export function TableContextBar({ editor }: Props) {
       </Btn>
       <Btn
         onClick={() => { const c = colIndex(editor); if (c > 0) runCmd(editor, moveTableColumn({ from: c, to: c - 1 })); }}
-        title="Move column left"
+        title={`Move column left${moveNote}`}
+        disabled={tracking}
       >
         <ArrowLeft size={sz} />
       </Btn>
       <Btn
         onClick={() => { const c = colIndex(editor); if (c >= 0 && c < colCount(editor) - 1) runCmd(editor, moveTableColumn({ from: c, to: c + 1 })); }}
-        title="Move column right"
+        title={`Move column right${moveNote}`}
+        disabled={tracking}
       >
         <ArrowRight size={sz} />
       </Btn>
@@ -158,13 +170,15 @@ export function TableContextBar({ editor }: Props) {
       </Btn>
       <Btn
         onClick={() => { const r = rowIndex(editor); if (r > 0) runCmd(editor, moveTableRow({ from: r, to: r - 1 })); }}
-        title="Move row up"
+        title={`Move row up${moveNote}`}
+        disabled={tracking}
       >
         <ArrowUp size={sz} />
       </Btn>
       <Btn
         onClick={() => { const r = rowIndex(editor); if (r >= 0 && r < rowCount(editor) - 1) runCmd(editor, moveTableRow({ from: r, to: r + 1 })); }}
-        title="Move row down"
+        title={`Move row down${moveNote}`}
+        disabled={tracking}
       >
         <ArrowDown size={sz} />
       </Btn>

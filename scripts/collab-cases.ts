@@ -8,6 +8,7 @@
 import { EditorState, TextSelection } from '@tiptap/pm/state';
 import type { Transaction } from '@tiptap/pm/state';
 import { history, undo, redo } from '@tiptap/pm/history';
+import { addRowAfter, addColumnAfter, deleteRow, deleteColumn, deleteTable } from '@tiptap/pm/tables';
 import { Slice, Fragment } from '@tiptap/pm/model';
 import type { Node as PMNode, Schema } from '@tiptap/pm/model';
 import {
@@ -377,6 +378,116 @@ export function runCollabCases(ctx: CollabContext) {
     s.selectRange(s.find('plain').to, s.find(' tail').from);
     s.del();
     eq('changes', summary(s), ['d:Alice: bold']);
+  });
+
+  // --- table structure ----------------------------------------------------
+
+  const TABLE = '| A | B | C |\n| --- | --- | --- |\n| a1 | b1 | c1 |\n| a2 | b2 | c2 |\n';
+  const grid = (doc: PMNode) => {
+    const rows: string[] = [];
+    doc.descendants((n) => {
+      if (n.type.name !== 'tableRow') return true;
+      const cells: string[] = [];
+      n.forEach((c) => cells.push(c.textContent || '_'));
+      rows.push(cells.join(','));
+      return false;
+    });
+    return rows.join(' / ');
+  };
+  const tableCase = (
+    name: string,
+    cmd: (st: EditorState, d: (tr: Transaction) => void) => boolean,
+    want: { during: string; label: string; accepted: string; rejected: string },
+  ) => {
+    test(`table: ${name} is one tracked change; accept/reject`, () => {
+      const s = new Session(parse(TABLE));
+      s.caretAfter('b1');
+      eq('command ran', cmd(s.state, s.dispatch), true);
+      eq('grid during review', grid(s.state.doc), want.during);
+      const changes = s.changes();
+      eq('one change', changes.length, 1);
+      eq('kind', changes[0].type[0], want.label);
+      eq('accepted', grid(s.state.apply(resolveChanges(s.state, new Set([changes[0].id]), 'accept')).doc), want.accepted);
+      eq('rejected', grid(s.state.apply(resolveChanges(s.state, new Set([changes[0].id]), 'reject')).doc), want.rejected);
+      // Pending state survives save → reopen.
+      const reopened = collectChanges(parse(s.md()));
+      eq('reopened', reopened.map((c) => [c.id, c.type, c.author, c.text]), changes.map((c) => [c.id, c.type, c.author, c.text]));
+    });
+  };
+  const ORIGINAL = 'A,B,C / a1,b1,c1 / a2,b2,c2';
+  tableCase('insert row', addRowAfter, {
+    during: 'A,B,C / a1,b1,c1 / _,_,_ / a2,b2,c2', label: 'i', accepted: 'A,B,C / a1,b1,c1 / _,_,_ / a2,b2,c2', rejected: ORIGINAL,
+  });
+  tableCase('insert column', addColumnAfter, {
+    during: 'A,B,_,C / a1,b1,_,c1 / a2,b2,_,c2', label: 'i', accepted: 'A,B,_,C / a1,b1,_,c1 / a2,b2,_,c2', rejected: ORIGINAL,
+  });
+  tableCase('delete row', deleteRow, {
+    during: ORIGINAL, label: 'd', accepted: 'A,B,C / a2,b2,c2', rejected: ORIGINAL,
+  });
+  tableCase('delete column', deleteColumn, {
+    during: ORIGINAL, label: 'd', accepted: 'A,C / a1,c1 / a2,c2', rejected: ORIGINAL,
+  });
+  tableCase('delete table', deleteTable, {
+    during: ORIGINAL, label: 'd', accepted: '', rejected: ORIGINAL,
+  });
+
+  test('table: change labels name the unit', () => {
+    const labels: string[] = [];
+    for (const cmd of [addRowAfter, addColumnAfter, deleteRow, deleteColumn, deleteTable]) {
+      const s = new Session(parse(TABLE));
+      s.caretAfter('b1');
+      cmd(s.state, s.dispatch);
+      labels.push(s.changes()[0].text);
+    }
+    eq('labels', labels, [
+      'Table row: _ | _ | _'.replace(/_/g, ''),
+      'Table column:  |  | ',
+      'Table row: a1 | b1 | c1',
+      'Table column: B | b1 | b2',
+      'Table: A | B | C | a1 | b1 | c1 | a2 | b2 | c2',
+    ]);
+  });
+
+  test('table: deleting a row you inserted removes it outright', () => {
+    const s = new Session(parse(TABLE));
+    s.caretAfter('b1');
+    addRowAfter(s.state, s.dispatch);
+    // Caret into the first cell of the inserted row (doc > table > row > cell > p).
+    const $b1 = s.state.doc.resolve(s.find('b1').from);
+    s.caret($b1.after($b1.depth - 2) + 3);
+    deleteRow(s.state, s.dispatch);
+    eq('grid', grid(s.state.doc), ORIGINAL);
+    eq('changes', s.changes().length, 0);
+  });
+
+  test('table: column inserted across a pending row deletion goes with that row', () => {
+    const s = new Session(parse(TABLE));
+    s.caretAfter('b1');
+    deleteRow(s.state, s.dispatch);
+    s.caretAfter('b2');
+    addColumnAfter(s.state, s.dispatch);
+    eq('changes', s.changes().map((c) => c.type).sort(), ['deletion', 'insertion']);
+    const accepted = s.state.apply(resolveChanges(s.state, null, 'accept'));
+    eq('accept all', grid(accepted.doc), 'A,B,_,C / a2,b2,_,c2');
+    const rejected = s.state.apply(resolveChanges(s.state, null, 'reject'));
+    eq('reject all', grid(rejected.doc), ORIGINAL);
+  });
+
+  test('table: undo of a tracked column delete restores the plain table', () => {
+    const s = new Session(parse(TABLE));
+    s.caretAfter('b1');
+    deleteColumn(s.state, s.dispatch);
+    s.undo();
+    eq('grid', grid(s.state.doc), ORIGINAL);
+    eq('changes', s.changes().length, 0);
+  });
+
+  test('table: publish applies pending row deletion', () => {
+    const s = new Session(parse(TABLE));
+    s.caretAfter('b1');
+    deleteRow(s.state, s.dispatch);
+    eq('published', grid(publishDoc(s.state.doc)), 'A,B,C / a2,b2,c2');
+    eq('no markers', toMd(publishDoc(s.state.doc)).includes('data-markov'), false);
   });
 
   // --- persistence --------------------------------------------------------

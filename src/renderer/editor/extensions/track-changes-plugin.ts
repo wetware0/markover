@@ -111,6 +111,13 @@ export function trackTransactions(
   const ownDeleteMark = (node: PMNode | null | undefined) =>
     node?.marks.find((m) => m.type === delType && m.attrs.author === author) ?? null;
 
+  // Table structure (rows/columns/tables) is tracked on cell attributes; one
+  // id per batch so e.g. a column insert/delete (one step per row) is one change.
+  let structIns: { changeId: string; author: string; date: string } | null = null;
+  let structDel: { changeId: string; author: string; date: string } | null = null;
+  const structInsAttr = () => (structIns ??= { changeId: newId(), author, date: today() });
+  const structDelAttr = () => (structDel ??= { changeId: newId(), author, date: today() });
+
   const singleStep = refs.length === 1 && transactions.filter(isTracked).length === 1;
   const oldSel = oldState.selection;
 
@@ -127,50 +134,62 @@ export function trackTransactions(
       const forwardDelete = singleStep && slice.size === 0 && oldSel.empty && oldSel.from === from;
       const ghostOnly = hasInline(deleted.content) && allInline(deleted.content, (n) => isGhost(n.marks));
 
-      if (ghostOnly && (backspace || forwardDelete)) {
+      if (isTableStructureSlice(deleted)) {
+        // Whole rows / cells (a column is one cell per row) / tables: keep them
+        // in place flagged as deleted; Accept removes exactly these nodes.
+        const restored = toDeletedCells(deleted);
+        if (restored) {
+          try {
+            tr.replace(pos, pos, restored);
+          } catch {
+            untracked = true;
+          }
+        }
+      } else if (ghostOnly && (backspace || forwardDelete)) {
         // Rule 5: restore the ghost, skip past its run, delete the next char.
         tr.replace(pos, pos, deleted);
         const after = pos + deleted.size;
         caret = skipGhostAndDelete(tr, backspace ? pos : after, backspace ? -1 : 1);
         continue;
-      }
+      } else {
+        // Text (possibly spanning blocks) → restore as ghost text.
+        const $from = docBefore.resolve(from);
+        const parentType = $from.node($from.sharedDepth(to)).type;
+        const $pos = tr.doc.resolve(pos);
+        const reuse =
+          ownDeleteMark($pos.nodeBefore) ??
+          ownDeleteMark($pos.nodeAfter) ??
+          findInFragment(deleted.content, (n) => ownDeleteMark(n));
+        const delMark = reuse ?? delType.create({ changeId: newId(), author, date: today() });
 
-      const $from = docBefore.resolve(from);
-      const parentType = $from.node($from.sharedDepth(to)).type;
-      const $pos = tr.doc.resolve(pos);
-      const reuse =
-        ownDeleteMark($pos.nodeBefore) ??
-        ownDeleteMark($pos.nodeAfter) ??
-        findInFragment(deleted.content, (n) => ownDeleteMark(n));
-      const delMark = reuse ?? delType.create({ changeId: newId(), author, date: today() });
-
-      const ghost = toGhost(deleted, parentType, delMark, true);
-      if (ghost === 'unmarkable') {
-        untracked = true;
-      } else if (ghost) {
-        try {
-          tr.replace(pos, pos, ghost);
-          if (backspace) caret = pos;
-        } catch {
-          // Dropping own insertions produced a shape that won't fit — retry
-          // keeping them (as deleted text) before giving up on tracking.
-          const full = toGhost(deleted, parentType, delMark, false);
+        const ghost = toGhost(deleted, parentType, delMark, true);
+        if (ghost === 'unmarkable') {
+          untracked = true;
+        } else if (ghost) {
           try {
-            if (full && full !== 'unmarkable') {
-              tr.replace(pos, pos, full);
-              if (backspace) caret = pos;
-            } else {
+            tr.replace(pos, pos, ghost);
+            if (backspace) caret = pos;
+          } catch {
+            // Dropping own insertions produced a shape that won't fit — retry
+            // keeping them (as deleted text) before giving up on tracking.
+            const full = toGhost(deleted, parentType, delMark, false);
+            try {
+              if (full && full !== 'unmarkable') {
+                tr.replace(pos, pos, full);
+                if (backspace) caret = pos;
+              } else {
+                untracked = true;
+              }
+            } catch {
               untracked = true;
             }
-          } catch {
-            untracked = true;
           }
         }
       }
     }
 
     // Inserted content → record its range in newState coordinates.
-    if (slice.size > 0 && hasInline(slice.content)) {
+    if (slice.size > 0 && (hasInline(slice.content) || hasTableCells(slice.content))) {
       insertions.push({ from: rest.map(from, 1), to: rest.map(from + slice.size, -1) });
     }
   }
@@ -184,12 +203,46 @@ export function trackTransactions(
     const after = tr.doc.resolve(b).nodeAfter;
     const own = (n: PMNode | null | undefined) =>
       n?.marks.find((m) => m.type === insType && m.attrs.author === author) ?? null;
+    // Whole cells inside the inserted range (new row/column/table) are
+    // tracked structurally; their text is part of that change.
+    const cells: Array<{ pos: number; node: PMNode }> = [];
+    tr.doc.nodesBetween(a, b, (node, pos) => {
+      if (isTableCell(node) && pos >= a && pos + node.nodeSize <= b) {
+        cells.push({ pos, node });
+        return false;
+      }
+      return true;
+    });
+    const newCellPositions = new Set(cells.map((c) => c.pos));
+    for (const { pos, node } of cells) {
+      // A cell added to a row that is pending deletion (e.g. inserting a
+      // column) belongs to that deletion too, so accepting it removes the
+      // whole row rather than leaving a stub row behind.
+      const $cell = tr.doc.resolve(pos);
+      const rowStart = $cell.start();
+      const siblingDeletes: Array<{ changeId: string } | null> = [];
+      $cell.parent.forEach((sibling, offset) => {
+        if (!newCellPositions.has(rowStart + offset)) siblingDeletes.push(sibling.attrs.markovDelete ?? null);
+      });
+      const rowDelete =
+        siblingDeletes.length > 0 &&
+        siblingDeletes.every((d) => d && d.changeId === siblingDeletes[0]?.changeId)
+          ? siblingDeletes[0]
+          : null;
+      tr.setNodeMarkup(pos, undefined, {
+        ...node.attrs,
+        markovInsert: node.attrs.markovInsert ?? structInsAttr(),
+        markovDelete: rowDelete,
+      });
+    }
+    if (!hasInline(tr.doc.slice(a, b).content)) continue;
     const mark = own(before) ?? own(after) ?? insType.create({ changeId: newId(), author, date: today() });
     // Typed text can inherit someone's insertion or a ghost's deletion mark
     // when the caret is inside that span; new text is only ever "inserted by me".
     tr.removeMark(a, b, insType);
     tr.removeMark(a, b, delType);
     tr.addMark(a, b, mark);
+    for (const { pos, node } of cells) tr.removeMark(pos, pos + node.nodeSize, insType);
   }
 
   if (caret !== null) {
@@ -236,6 +289,38 @@ export function trackTransactions(
     return dir < 0 ? a : b;
   }
 
+  /** Deleted rows/cells/tables flagged as pending deletions (own inserted ones dropped). */
+  function toDeletedCells(deleted: Slice): Slice | null {
+    const ownInsertedOnly = (node: PMNode) => {
+      let all = true;
+      let any = false;
+      node.descendants((n) => {
+        if (!isTableCell(n)) return true;
+        any = true;
+        if ((n.attrs.markovInsert as { author?: string } | null)?.author !== author) all = false;
+        return false;
+      });
+      if (isTableCell(node)) return (node.attrs.markovInsert as { author?: string } | null)?.author === author;
+      return any && all;
+    };
+    const mark = (node: PMNode): PMNode => {
+      if (isTableCell(node)) {
+        return node.attrs.markovDelete ? node : node.type.create({ ...node.attrs, markovDelete: structDelAttr() }, node.content, node.marks);
+      }
+      const kids: PMNode[] = [];
+      node.forEach((c) => kids.push(mark(c)));
+      return node.copy(Fragment.from(kids));
+    };
+    const out: PMNode[] = [];
+    deleted.content.forEach((child) => {
+      // Deleting a row/column/table you inserted yourself just removes it.
+      if (ownInsertedOnly(child)) return;
+      out.push(mark(child));
+    });
+    if (out.length === 0) return null;
+    return new Slice(Fragment.from(out), 0, 0);
+  }
+
   function toGhost(
     deleted: Slice,
     parentType: NodeType,
@@ -269,6 +354,36 @@ export function trackTransactions(
     if (!hasInline(content)) return null;
     return new Slice(content, deleted.openStart, deleted.openEnd);
   }
+}
+
+function tableRole(node: PMNode): string | undefined {
+  return node.type.spec.tableRole as string | undefined;
+}
+
+export function isTableCell(node: PMNode): boolean {
+  const role = tableRole(node);
+  return role === 'cell' || role === 'header_cell';
+}
+
+/** A closed slice made only of table rows, cells or whole tables. */
+function isTableStructureSlice(slice: Slice): boolean {
+  if (slice.openStart !== 0 || slice.openEnd !== 0 || slice.content.childCount === 0) return false;
+  let ok = true;
+  slice.content.forEach((n) => {
+    const role = tableRole(n);
+    if (role !== 'row' && role !== 'table' && !isTableCell(n)) ok = false;
+  });
+  return ok;
+}
+
+function hasTableCells(frag: Fragment): boolean {
+  let found = false;
+  frag.descendants((n) => {
+    if (found) return false;
+    if (isTableCell(n)) { found = true; return false; }
+    return !n.isInline;
+  });
+  return found;
 }
 
 function hasInline(frag: Fragment): boolean {
@@ -318,7 +433,12 @@ export function stripCollaborationMarksFromSlice(slice: Slice, schema: { marks: 
         out.push(child.mark(child.marks.filter((m) => !strip.includes(m.type))));
         return;
       }
-      out.push(child.copy(mapFragment(child.content)));
+      const content = mapFragment(child.content);
+      if (isTableCell(child) && (child.attrs.markovInsert || child.attrs.markovDelete)) {
+        out.push(child.type.create({ ...child.attrs, markovInsert: null, markovDelete: null }, content, child.marks));
+      } else {
+        out.push(child.copy(content));
+      }
     });
     return Fragment.from(out);
   };

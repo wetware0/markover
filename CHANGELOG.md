@@ -8,6 +8,7 @@ All notable changes to Markover are documented here.
 
 ### Added
 
+- **Table structure is tracked.** With track changes on, inserted rows, columns and tables are highlighted as one insertion, and deleted rows, columns and tables stay in place struck through as one deletion until accepted. Each appears as a single entry in the Changes panel (labelled row/column/table) with its own Accept/Reject, and pending table changes survive save and reopen. Moving rows or columns is unavailable while tracking.
 - Clicking a change in the Changes sidebar selects it in the document. Clicking commented text opens and highlights its thread; moving the caret into commented text makes that thread active.
 - Comment threads whose text has been deleted stay in the sidebar marked *text deleted* (and are kept on save) instead of silently losing their anchor. Reopening such a file no longer reports a collaboration-data error.
 
@@ -18,6 +19,7 @@ All notable changes to Markover are documented here.
 - Typing inside an existing tracked insertion or deletion no longer duplicates characters or stacks two change marks on the same text.
 - Tracked deletions keep their formatting and comment highlights, and deletions across paragraphs are tracked as one change with the paragraph break restored on reject.
 - Undo after a tracked edit no longer leaves orphaned insertion or deletion marks.
+- Table edits with track changes on no longer lose data: deleting a column previously duplicated cell text and corrupted the table, accepting a deleted row removed the entire table, and inserted rows/columns were not tracked at all.
 - Accepting a deleted word inside a table cell no longer deletes the whole table. Accepting a deleted paragraph removes the paragraph rather than leaving an empty line. Accept All and Reject All are a single undo step.
 - The Changes sidebar shows the full text of each change (previously only its first formatted fragment).
 - Author names containing quotes or angle brackets no longer corrupt tracked-change markup on save.
@@ -27,7 +29,7 @@ All notable changes to Markover are documented here.
 
 ### Internal
 
-- Track-changes logic is now a pure `trackTransactions` function plus `track-changes-ops.ts` (collect, accept/reject, publish), so the headless suite drives the real plugin with prosemirror-history. Added 32 behaviour cases to `scripts/roundtrip-test.ts` and new Playwright specs for slow-typing coalescing, word deletion, undo, accept/reject, save/reopen, and comment flows.
+- Track-changes logic is now a pure `trackTransactions` function plus `track-changes-ops.ts` (collect, accept/reject, publish), so the headless suite drives the real plugin with prosemirror-history. Added 42 behaviour cases to `scripts/roundtrip-test.ts` and new Playwright specs for slow-typing coalescing, table row/column/table insert and delete with accept/reject, word deletion, undo, accept/reject, save/reopen, and comment flows.
 
 ---
 

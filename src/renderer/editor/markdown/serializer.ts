@@ -288,7 +288,24 @@ function serializeTableCell(cell: Node): string {
   const inner = new MarkdownSerializerState();
   inner.renderInlineContent(cell.firstChild || cell);
   // A Markdown table row must stay on one source line, including code/math cells.
-  return inner.getOutput().trim().replace(/ *\n/g, '<br>').replace(/\|/g, '\\|');
+  const text = inner.getOutput().trim().replace(/ *\n/g, '<br>').replace(/\|/g, '\\|');
+  return cellChangeMarkers(cell) + text;
+}
+
+/**
+ * Tracked table structure (inserted/deleted rows, columns, tables) lives on
+ * cell attributes; persist it as empty marker spans at the start of the cell.
+ * See src/renderer/editor/extensions/table-cells.ts.
+ */
+function cellChangeMarkers(cell: Node): string {
+  let out = '';
+  for (const [op, attr] of [['ins', 'markovInsert'], ['del', 'markovDelete']] as const) {
+    const change = cell.attrs[attr] as { changeId: string; author: string; date: string } | null | undefined;
+    if (!change) continue;
+    const esc = (v: unknown) => escapeHtmlAttr(v).replace(/\|/g, '&#124;');
+    out += `<span data-markov="cell" data-op="${op}" data-change-id="${esc(change.changeId)}" data-author="${esc(change.author)}" data-date="${esc(change.date)}"></span>`;
+  }
+  return out;
 }
 
 const nodeHandlers: Record<string, NodeHandler> = {
