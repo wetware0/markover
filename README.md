@@ -34,6 +34,7 @@ Built with Electron, React, and TipTap (ProseMirror).
 ### File Handling
 
 - **Open / Save / Save As** — Standard file operations for `.md` files
+- **Windows file association** — Once installed, Markover appears under *Open with* for `.md` and `.markdown` files. *File → Open Markdown Files with Markover...* takes you to Windows Default apps to make it the default.
 - **Recent files** — Deduplicated, most-recently-used ordering
 - **Publish** — Export a clean `.md` file with all metadata stripped and all tracked changes accepted (`Ctrl+Shift+P`)
 - **Unsaved changes guard** — Prompted to save (or discard) before closing, opening another file, or creating a new document

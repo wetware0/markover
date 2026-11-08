@@ -4,6 +4,21 @@ All notable changes to Markover are documented here.
 
 ---
 
+## Unreleased
+
+### Added
+
+- **Markover now appears in Windows "Open with" for `.md` and `.markdown` files** as soon as it's installed, so there's no need to hunt for `Markover.exe`. Existing installs pick this up with their next automatic update.
+- **File → Open Markdown Files with Markover...** opens Windows Default apps straight at Markover's page, so making it the default takes one click. Windows 10 and 11 don't let apps make themselves the default; this is as close as Windows allows.
+- Uninstalling Markover removes the registration again.
+
+### Internal
+
+- The association is per-user (no admin rights needed) and points at Squirrel's root launcher, so it keeps working across updates. It never changes an existing default handler.
+- New `scripts/test-file-association.ts` runs the real `reg.exe` commands against a throwaway registry key. New e2e tests launch the app the way Windows does on double-click and check the menu item.
+
+---
+
 ## [1.1.6](https://github.com/wetware0/markover/compare/v1.1.5...v1.1.6) - 2026-11-08
 
 ### Added

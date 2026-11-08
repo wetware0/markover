@@ -43,6 +43,7 @@ async function atomicWrite(filePath: string, data: string | Uint8Array): Promise
 import { IPC_CHANNELS } from '../shared/types/ipc';
 import { buildMenu } from './menu';
 import { registerGitHubHandlers } from './github/ipc';
+import { handleSquirrelFileAssociation } from './file-association';
 
 // Must be called before app.ready
 protocol.registerSchemesAsPrivileged([
@@ -50,6 +51,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 if (started) {
+  handleSquirrelFileAssociation();
   app.quit();
 }
 
