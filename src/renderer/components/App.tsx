@@ -451,7 +451,13 @@ export function App() {
     (changeId: string) => {
       if (!editor) return;
       const range = changeRange(editor.state.doc, changeId);
-      if (range) editor.chain().setTextSelection(range).scrollIntoView().run();
+      // A whole math/Mermaid block or image has no text to select: select the node.
+      const atom = range ? editor.state.doc.nodeAt(range.from) : null;
+      if (range && atom?.isAtom && atom.isBlock && range.to === range.from + atom.nodeSize) {
+        editor.chain().setNodeSelection(range.from).scrollIntoView().run();
+      } else if (range) {
+        editor.chain().setTextSelection(range).scrollIntoView().run();
+      }
       focusEditorNow(editor);
     },
     [editor],

@@ -319,6 +319,44 @@
   color: #fca5a5;
 }
 
+/* Track changes: whole blocks (code, math, Mermaid, images, rules) */
+.ProseMirror [data-markov-block-insert] {
+  outline: 2px solid rgba(34, 197, 94, 0.6);
+  outline-offset: 2px;
+  background-color: rgba(34, 197, 94, 0.08);
+}
+
+.ProseMirror [data-markov-block-delete] {
+  outline: 2px dashed rgba(239, 68, 68, 0.65);
+  outline-offset: 2px;
+  opacity: 0.55;
+}
+
+.ProseMirror [data-markov-block-delete] pre,
+.ProseMirror pre[data-markov-block-delete] {
+  text-decoration: line-through;
+  text-decoration-color: #ef4444;
+}
+
+/* Track changes: paragraph breaks (Enter / Backspace at a paragraph start) */
+.ProseMirror [data-markov-split-mark]::before,
+.ProseMirror [data-markov-join-mark]::before {
+  content: '\00B6';
+  font-weight: 600;
+  margin-right: 0.25em;
+  user-select: none;
+  pointer-events: none;
+}
+
+.ProseMirror [data-markov-split-mark]::before {
+  color: #16a34a;
+}
+
+.ProseMirror [data-markov-join-mark]::before {
+  color: #dc2626;
+  text-decoration: line-through;
+}
+
 /* Dark mode: ProseMirror overrides */
 .dark .ProseMirror {
   color: #e5e7eb;

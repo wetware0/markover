@@ -28,6 +28,7 @@ import { ImageDrop } from './extensions/image-drop';
 import { MarkovHighlight } from './extensions/markover-highlight';
 import { MarkovInsert } from './extensions/markover-insert';
 import { MarkovDelete } from './extensions/markover-delete';
+import { BlockChanges } from './extensions/block-changes';
 import { TrackChangesPlugin } from './extensions/track-changes-plugin';
 import { FindReplaceExtension } from './extensions/find-replace-extension';
 
@@ -63,6 +64,7 @@ const EDITOR_EXTENSIONS = [
   MarkovHighlight,
   MarkovInsert,
   MarkovDelete,
+  BlockChanges,
   TrackChangesPlugin,
   FindReplaceExtension,
 ];

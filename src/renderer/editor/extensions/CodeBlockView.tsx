@@ -10,11 +10,23 @@ const LANGUAGES = [
   'sql', 'swift', 'toml', 'typescript', 'xml', 'yaml',
 ];
 
+/** Tracked insert/delete of the whole block (see block-changes.ts). */
+function blockChangeProps(attrs: Record<string, unknown>): Record<string, string> {
+  const props: Record<string, string> = {};
+  const ins = attrs.markovInsert as { changeId?: string } | null;
+  const del = attrs.markovDelete as { changeId?: string } | null;
+  if (ins) props['data-markov-block-insert'] = 'true';
+  if (del) props['data-markov-block-delete'] = 'true';
+  const id = del?.changeId ?? ins?.changeId;
+  if (id) props['data-change-id'] = id;
+  return props;
+}
+
 export function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
   const language = (node.attrs.language as string) || '';
 
   return (
-    <NodeViewWrapper className="code-block-wrapper">
+    <NodeViewWrapper className="code-block-wrapper" {...blockChangeProps(node.attrs)}>
       <div
         className="flex items-center justify-between px-3 py-1 bg-gray-700 dark:bg-gray-950 rounded-t-md select-none"
         contentEditable={false}

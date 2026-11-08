@@ -73,6 +73,9 @@ export const MarkoverImage = Image.extend({
       img.style.height = 'auto';
       img.style.borderRadius = '0.25em';
       img.classList.add('markov-editable-node');
+      // Tracked insert/delete of the image (see block-changes.ts).
+      if (node.attrs.markovInsert) img.setAttribute('data-markov-block-insert', 'true');
+      if (node.attrs.markovDelete) img.setAttribute('data-markov-block-delete', 'true');
       img.title = (node.attrs.alt as string) || 'Double-click to edit';
 
       img.addEventListener('dblclick', (e) => {

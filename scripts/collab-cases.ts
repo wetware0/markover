@@ -5,15 +5,19 @@
  * Delete, typing over a selection, undo and paste. Invoked from
  * scripts/roundtrip-test.ts, which owns the JSDOM + schema setup.
  */
-import { EditorState, TextSelection } from '@tiptap/pm/state';
+import { EditorState, NodeSelection, TextSelection } from '@tiptap/pm/state';
 import type { Transaction } from '@tiptap/pm/state';
 import { history, undo, redo } from '@tiptap/pm/history';
+import { splitBlock, joinBackward, joinForward } from '@tiptap/pm/commands';
+import { splitListItem } from '@tiptap/pm/schema-list';
 import { addRowAfter, addColumnAfter, deleteRow, deleteColumn, deleteTable } from '@tiptap/pm/tables';
 import { Slice, Fragment } from '@tiptap/pm/model';
 import type { Node as PMNode, Schema } from '@tiptap/pm/model';
 import {
   createTrackChangesPlugin,
   stripCollaborationMarksFromSlice,
+  movedCommentIds,
+  trackNetChange,
 } from '../src/renderer/editor/extensions/track-changes-plugin';
 import type { TrackChangesConfig } from '../src/renderer/editor/extensions/track-changes-plugin';
 import {
@@ -302,12 +306,257 @@ export function runCollabCases(ctx: CollabContext) {
     eq('accepted md', toMd(accepted.doc), 'Keep\n\nTail\n');
   });
 
-  test('tc: edit inside a code block is reported as untracked, not lost', () => {
-    const s = new Session(parse('```\ncode here\n```\n'));
+  // --- tracked inline atoms (math, footnote refs) ------------------------
+
+  const reopenEq = (s: Session) => {
+    const reopened = collectChanges(parse(s.md()));
+    eq('reopened', reopened.map((c) => [c.id, c.type, c.author, c.text]), s.changes().map((c) => [c.id, c.type, c.author, c.text]));
+  };
+  const accepted = (s: Session) => toMd(s.state.apply(resolveChanges(s.state, null, 'accept')).doc);
+  const rejected = (s: Session) => toMd(s.state.apply(resolveChanges(s.state, null, 'reject')).doc);
+
+  test('atoms: deleted inline math keeps its markup on save and reload', () => {
+    const s = new Session(parse('Sum $x^2$ end\n'));
+    // (find() offsets ignore the atom, which takes one position)
+    s.selectRange(s.find('Sum').to, s.find(' end').from + 1);
+    s.del();
+    eq('changes', summary(s), ['d:Alice: [katexInline]']);
+    eq('md', s.md(), 'Sum<span data-markov="del" data-change-id="c1" data-author="Alice" data-date="2026-01-01"> $x^2$</span> end\n');
+    reopenEq(s);
+    eq('reject', rejected(s), 'Sum $x^2$ end\n');
+    eq('accept', accepted(s), 'Sum end\n');
+  });
+
+  test('atoms: inserted inline math and footnote ref round-trip as one insertion', () => {
+    const s = new Session(parse('Text[^1] here.\n\n[^1]: Note.\n'));
+    s.caretAfter('here');
+    s.type(' ');
+    s.dispatch(s.state.tr.replaceSelectionWith(schema.nodes.katexInline.create({ math: 'a+b' })));
+    s.dispatch(s.state.tr.replaceSelectionWith(schema.nodes.footnoteRef.create({ id: '1', label: '1' })));
+    eq('changes', summary(s), ['i:Alice: [katexInline][footnoteRef]']);
+    eq('one span', (s.md().match(/data-markov="ins"/g) ?? []).length, 1);
+    reopenEq(s);
+    eq('reject', rejected(s).split('\n')[0], 'Text[^1] here.');
+  });
+
+  test('atoms: Backspace over a ghost inline atom extends the deletion', () => {
+    const s = new Session(parse('ab $x$ cd\n'));
+    s.caret(s.find('ab ').to + 1); // after the atom
+    s.backspace(2);
+    eq('text', s.text(), 'ab  cd');
+    eq('changes', summary(s), ['d:Alice: [katexInline]']);
+  });
+
+  test('atoms: comment on inline math survives save and reload', () => {
+    const s = new Session(parse('See <span data-markov="hl" data-comment-id="k1">$e=mc^2$ here</span> now\n'));
+    eq('md', s.md(), 'See <span data-markov="hl" data-comment-id="k1">$e=mc^2$ here</span> now\n');
+    eq('anchored', [...anchoredCommentIds(parse(s.md()))], ['k1']);
+  });
+
+  // --- code, math and Mermaid blocks --------------------------------------
+
+  const CODE = 'Intro\n\n```js\ncode here\n```\n\nOutro\n';
+
+  test('blocks: editing a code block keeps the original as a deleted block', () => {
+    const s = new Session(parse(CODE));
     s.caretAfter('code');
     s.backspace();
-    eq('untracked events', s.untracked, 1);
-    eq('text', s.text().trim(), 'cod here');
+    s.type('e!');
+    eq('untracked events', s.untracked, 0);
+    eq('changes', summary(s), ['d:Alice:[Code block] code here', 'i:Alice:[Code block] code! here']);
+    reopenEq(s);
+    eq('accept', accepted(s), 'Intro\n\n```js\ncode! here\n```\n\nOutro\n');
+    eq('reject', rejected(s), CODE);
+  });
+
+  test('blocks: undo of a code block edit restores the plain block', () => {
+    const s = new Session(parse(CODE));
+    s.caretAfter('code');
+    s.type('X');
+    s.undo();
+    eq('md', s.md(), CODE);
+  });
+
+  test('blocks: deleting a whole code block is tracked; accept/reject', () => {
+    const s = new Session(parse(CODE));
+    const r = s.find('code here');
+    s.selectRange(r.from - 1, r.to + 1);
+    s.del();
+    eq('changes', summary(s), ['d:Alice:[Code block] code here']);
+    reopenEq(s);
+    eq('accept', accepted(s), 'Intro\n\nOutro\n');
+    eq('reject', rejected(s), CODE);
+  });
+
+  test('blocks: deletion across text and a code block is ONE change', () => {
+    const s = new Session(parse(CODE));
+    s.selectRange(s.find('tro').from, s.find('Out').to);
+    s.del();
+    eq('changes', summary(s), ['d:Alice:tro ¶ [Code block] code here ¶ Out']);
+    eq('untracked', s.untracked, 0);
+    eq('reject', rejected(s), CODE);
+    eq('accept', accepted(s), 'Inro\n');
+  });
+
+  const nodeDelete = (s: Session, typeName: string) => {
+    let at = -1;
+    s.state.doc.descendants((n, p) => { if (n.type.name === typeName && at < 0) at = p; return at < 0; });
+    s.dispatch(s.state.tr.setSelection(NodeSelection.create(s.state.doc, at)));
+    s.dispatch(s.state.tr.deleteSelection());
+  };
+
+  for (const [label, md, type, entry] of [
+    ['math block', 'A\n\n$$\nx^2\n$$\n\nB\n', 'katexBlock', 'd:Alice:[Math block] x^2'],
+    ['Mermaid diagram', 'A\n\n```mermaid\ngraph TD\n  a-->b\n```\n\nB\n', 'mermaidBlock', 'd:Alice:[Mermaid diagram] graph TD'],
+    ['image', 'A\n\n![pic](img.png)\n\nB\n', 'image', 'd:Alice:[Image] pic'],
+  ] as const) {
+    test(`blocks: deleting a ${label} is tracked; save/reload; accept/reject`, () => {
+      const s = new Session(parse(md));
+      nodeDelete(s, type);
+      eq('changes', summary(s), [entry]);
+      eq('untracked', s.untracked, 0);
+      reopenEq(s);
+      eq('reject', rejected(s), md);
+      eq('accept', accepted(s), 'A\n\nB\n');
+    });
+  }
+
+  test('blocks: editing a math block from its editor = old deleted + new inserted', () => {
+    const s = new Session(parse('A\n\n$$\nx^2\n$$\n'));
+    let at = -1;
+    s.state.doc.descendants((n, p) => { if (n.type.name === 'katexBlock') at = p; return true; });
+    s.dispatch(s.state.tr.setNodeMarkup(at, undefined, { math: 'y^3' }));
+    eq('changes', summary(s), ['d:Alice:[Math block] x^2', 'i:Alice:[Math block] y^3']);
+    reopenEq(s);
+    eq('reject', rejected(s), 'A\n\n$$\nx^2\n$$\n');
+    eq('accept', accepted(s), 'A\n\n$$\ny^3\n$$\n');
+  });
+
+  test('blocks: inserting a code block is tracked; deleting your own removes it', () => {
+    const s = new Session(parse('A\n\nB\n'));
+    const pos = s.find('A').to + 1;
+    s.dispatch(s.state.tr.insert(pos, schema.nodes.codeBlock.create({ language: 'py' }, schema.text('print(1)'))));
+    eq('changes', summary(s), ['i:Alice:[Code block] print(1)']);
+    s.caretAfter('print(1)');
+    s.type('!');
+    eq('free edits in own block', summary(s), ['i:Alice:[Code block] print(1)!']);
+    reopenEq(s);
+    eq('reject', rejected(s), 'A\n\nB\n');
+    nodeDelete(s, 'codeBlock');
+    eq('after delete', summary(s), []);
+    eq('md', s.md(), 'A\n\nB\n');
+  });
+
+  test('blocks: publish applies pending block changes without markers', () => {
+    const s = new Session(parse(CODE));
+    s.caretAfter('code');
+    s.type('X');
+    const out = toMd(publishDoc(s.state.doc));
+    eq('published', out, 'Intro\n\n```js\ncodeX here\n```\n\nOutro\n');
+  });
+
+  // --- paragraph splits and joins -----------------------------------------
+
+  test('para: Enter is a tracked split; reject joins, accept keeps', () => {
+    const s = new Session(parse('Hello world\n'));
+    s.caretAfter('Hello');
+    splitBlock(s.state, s.dispatch);
+    eq('blocks', s.state.doc.childCount, 2);
+    eq('changes', summary(s), ['i:Alice:¶']);
+    reopenEq(s);
+    eq('reject', rejected(s), 'Hello world\n');
+    eq('accept', accepted(s), 'Hello\n\n world\n');
+    // Markdown drops the space at the break on save; the change keeps it.
+    const reloaded = new Session(parse(s.md()));
+    eq('reloaded text', reloaded.state.doc.lastChild?.textContent, 'world');
+    eq('reject after reload', rejected(reloaded), 'Hello world\n');
+  });
+
+  test('para: typing, Enter, typing is ONE insertion; reject restores', () => {
+    const s = new Session(parse('Start\n'));
+    s.caretAfter('Start');
+    s.type(' more');
+    splitBlock(s.state, s.dispatch);
+    s.type('next');
+    eq('changes', summary(s), ['i:Alice: more ¶ next']);
+    reopenEq(s);
+    eq('reject', rejected(s), 'Start\n');
+    eq('accept', accepted(s), 'Start more\n\nnext\n');
+  });
+
+  test('para: Enter on an empty line survives save', () => {
+    const s = new Session(parse('One\n'));
+    s.caretAfter('One');
+    splitBlock(s.state, s.dispatch);
+    eq('changes', summary(s), ['i:Alice:¶']);
+    eq('blocks after reload', parse(s.md()).childCount, 2);
+    reopenEq(s);
+    eq('reject', rejected(s), 'One\n');
+  });
+
+  test('para: Backspace at paragraph start is a tracked join', () => {
+    const s = new Session(parse('One\n\nTwo\n'));
+    s.caretBefore('Two');
+    joinBackward(s.state, s.dispatch);
+    eq('blocks', s.state.doc.childCount, 2);
+    eq('changes', summary(s), ['d:Alice:¶']);
+    eq('caret at end of One', s.state.selection.from, s.find('One').to);
+    reopenEq(s);
+    eq('accept', accepted(s), 'OneTwo\n');
+    eq('reject', rejected(s), 'One\n\nTwo\n');
+    s.backspace();
+    eq('next Backspace deletes a character', summary(s), ['d:Alice:e ¶']);
+  });
+
+  test('para: Delete at paragraph end is a tracked join; caret moves on', () => {
+    const s = new Session(parse('One\n\nTwo\n'));
+    s.caretAfter('One');
+    joinForward(s.state, s.dispatch);
+    eq('blocks', s.state.doc.childCount, 2);
+    eq('caret at start of Two', s.state.selection.from, s.find('Two').from);
+    eq('accept', accepted(s), 'OneTwo\n');
+  });
+
+  test('para: removing an empty paragraph is tracked', () => {
+    const s = new Session(parse('One\n'));
+    s.config.enabled = false;
+    s.caretAfter('One');
+    splitBlock(s.state, s.dispatch);
+    s.type('Two');
+    s.caretBefore('Two');
+    splitBlock(s.state, s.dispatch); // One / (empty) / Two
+    s.config.enabled = true;
+    s.caret(s.find('Two').from - 2); // inside the empty paragraph
+    joinBackward(s.state, s.dispatch);
+    eq('blocks', s.state.doc.childCount, 3);
+    eq('changes', summary(s), ['d:Alice:¶']);
+    eq('accept', accepted(s), 'One\n\nTwo\n');
+  });
+
+  test('para: joining away your own split is a real join', () => {
+    const s = new Session(parse('Hello world\n'));
+    s.caretAfter('Hello');
+    splitBlock(s.state, s.dispatch);
+    joinBackward(s.state, s.dispatch);
+    eq('changes', summary(s), []);
+    eq('md', s.md(), 'Hello world\n');
+  });
+
+  test('para: heading split and list item split reject to the original', () => {
+    const h = new Session(parse('# Title here\n'));
+    h.caretAfter('Title');
+    splitBlock(h.state, h.dispatch);
+    eq('heading changes', summary(h).length, 1);
+    reopenEq(h);
+    eq('heading reject', rejected(h), '# Title here\n');
+    const l = new Session(parse('- one two\n- three\n'));
+    l.caretAfter('one');
+    splitListItem(schema.nodes.listItem)(l.state, l.dispatch);
+    eq('list items', l.state.doc.firstChild?.childCount, 3);
+    eq('list changes', summary(l), ['i:Alice:¶']);
+    reopenEq(l);
+    eq('list reject', rejected(l), '- one two\n- three\n');
+    eq('list accept', accepted(l), '- one\n-  two\n- three\n');
   });
 
   // --- undo / redo --------------------------------------------------------
@@ -581,6 +830,81 @@ export function runCollabCases(ctx: CollabContext) {
     const marks: string[] = [];
     p.forEach((n) => n.marks.forEach((m) => marks.push(m.type.name)));
     eq('marks', marks, ['bold']);
+  });
+
+  // --- IME composition ----------------------------------------------------
+
+  test('ime: a composition is tracked as its net change, not its steps', () => {
+    // While composing the plugin defers; afterwards it tracks start → end.
+    // Intermediate steps replace text the composition itself inserted.
+    const cfg: TrackChangesConfig = { enabled: true, author: 'Alice' };
+    let seq = 0;
+    const opts = { today: () => '2026-01-01', newId: () => `c${++seq}` };
+    const start = EditorState.create({ doc: parse('The cat sat\n') });
+    const sel = (st: EditorState, from: number, to: number) => st.apply(st.tr.setSelection(TextSelection.create(st.doc, from, to)));
+    let st = sel(start, 5, 8); // "cat"
+    const begin = st;
+    for (const text of ['ね', 'ねこ', '猫']) {
+      const { from, to } = st.selection;
+      st = st.apply(st.tr.insertText(text, from, to));
+      st = sel(st, 5, 5 + text.length);
+    }
+    const tr = must(trackNetChange(begin, st, cfg, opts));
+    const done = st.apply(tr);
+    eq('text', done.doc.textContent, 'The cat猫 sat');
+    eq('changes', collectChanges(done.doc).map((c) => `${c.type[0]}:${c.text}`), ['d:cat', 'i:猫']);
+    // Repeated characters: composing "a" after "a" is one insertion of "a".
+    const s2 = EditorState.create({ doc: parse('aa\n') });
+    const e2 = s2.apply(s2.tr.insertText('a', 3));
+    const t2 = must(trackNetChange(s2, e2, cfg, opts));
+    eq('repeat', collectChanges(e2.apply(t2).doc).map((c) => `${c.type[0]}:${c.text}`), ['i:a']);
+  });
+
+  // --- cut and paste keeps comments ---------------------------------------
+
+  /** Cut the selection and paste it at `needle`'s end, as the view would. */
+  const cutPaste = (s: Session, cut: string, pasteAfter: string) => {
+    s.select(cut);
+    const clip = s.state.doc.slice(s.state.selection.from, s.state.selection.to);
+    s.dispatch(s.state.tr.deleteSelection());
+    s.caretAfter(pasteAfter);
+    const slice = stripCollaborationMarksFromSlice(clip, schema, movedCommentIds(clip, s.state.doc));
+    s.dispatch(s.state.tr.replaceSelection(slice));
+  };
+  const COMMENTED = 'Start <span data-markov="hl" data-comment-id="k1">moved words</span> middle end\n';
+
+  test('paste: cut and paste of commented text keeps the comment', () => {
+    const s = new Session(parse(COMMENTED));
+    s.config.enabled = false;
+    cutPaste(s, 'moved words', 'end');
+    eq('text', s.text(), 'Start  middle endmoved words');
+    const r = must(commentRange(s.state.doc, 'k1'));
+    eq('anchor', s.state.doc.textBetween(r.from, r.to), 'moved words');
+  });
+
+  test('paste: copy and paste of commented text does not duplicate the comment', () => {
+    const s = new Session(parse(COMMENTED));
+    s.config.enabled = false;
+    s.select('moved words');
+    const clip = s.state.doc.slice(s.state.selection.from, s.state.selection.to);
+    s.caretAfter('end');
+    s.dispatch(s.state.tr.replaceSelection(stripCollaborationMarksFromSlice(clip, schema, movedCommentIds(clip, s.state.doc))));
+    const r = must(commentRange(s.state.doc, 'k1'));
+    eq('anchor stays on the original', s.state.doc.textBetween(r.from, r.to), 'moved words');
+  });
+
+  test('paste: tracked cut and paste moves the comment with the text', () => {
+    const s = new Session(parse(COMMENTED));
+    cutPaste(s, 'moved words', 'end');
+    eq('changes', summary(s), ['d:Alice:moved words', 'i:Alice:moved words']);
+    // Accepting the move leaves the comment on the pasted text…
+    const a = s.state.apply(resolveChanges(s.state, null, 'accept'));
+    const ra = must(commentRange(a.doc, 'k1'));
+    eq('after accept', a.doc.textBetween(ra.from, ra.to), 'moved words');
+    eq('accepted text', a.doc.textContent, 'Start  middle endmoved words');
+    // …and rejecting it leaves the comment where it was.
+    const r = s.state.apply(resolveChanges(s.state, null, 'reject'));
+    eq('after reject', toMd(r.doc), COMMENTED);
   });
 
   for (const [name, fn] of cases) {

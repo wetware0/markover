@@ -47,6 +47,7 @@ import { FrontMatter } from '../src/renderer/editor/extensions/front-matter';
 import { MarkovHighlight } from '../src/renderer/editor/extensions/markover-highlight';
 import { MarkovInsert } from '../src/renderer/editor/extensions/markover-insert';
 import { MarkovDelete } from '../src/renderer/editor/extensions/markover-delete';
+import { BlockChanges } from '../src/renderer/editor/extensions/block-changes';
 
 import { markdownToHtml } from '../src/renderer/editor/markdown/parser';
 import { prosemirrorToMarkdown } from '../src/renderer/editor/markdown/serializer';
@@ -83,6 +84,7 @@ const extensions = [
   MarkovHighlight,
   MarkovInsert,
   MarkovDelete,
+  BlockChanges,
 ];
 
 const schema = getSchema(extensions);

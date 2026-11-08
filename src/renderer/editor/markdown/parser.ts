@@ -137,6 +137,112 @@ md.core.ruler.after('github-task-lists', 'markover_task_items', (state) => {
   }
 });
 
+// Tracked block and paragraph-break changes (see extensions/block-changes.ts).
+// The serializer writes them as HTML markers next to the block:
+//   <div data-markov="block" data-op="ins|del" ...></div>   (own HTML block, before a
+//                                                             code/math/Mermaid block or rule)
+//   <span data-markov="para" data-op="split|join" ...></span> (start of a paragraph/heading)
+// Fold each marker into a data-markov-* JSON attribute on the block it belongs
+// to, which the TipTap attribute parsers read back.
+const BLOCK_MARKER_RE = /<div data-markov="block"([^>]*)><\/div>/g;
+const PARA_MARKER_RE = /^<span data-markov="para"([^>]*)>$/;
+const BLOCK_ATTR: Record<string, string> = { ins: 'data-markov-block-ins', del: 'data-markov-block-del' };
+const PARA_ATTR: Record<string, string> = { split: 'data-markov-split', join: 'data-markov-join' };
+
+function readMarkerAttrs(attrText: string): { op: string; json: string } | null {
+  const get = (name: string) => {
+    const m = attrText.match(new RegExp(`(?:^|\\s)${name}="([^"]*)"`));
+    return m ? decodeEntities(m[1]) : '';
+  };
+  const op = get('data-op');
+  const changeId = get('data-change-id');
+  if (!op || !changeId) return null;
+  const ws = get('data-ws');
+  const change = { changeId, author: get('data-author'), date: get('data-date'), ...(ws ? { ws } : {}) };
+  return { op, json: JSON.stringify(change) };
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#124;/g, '|')
+    .replace(/&amp;/g, '&');
+}
+
+md.core.ruler.push('markover_block_changes', (state) => {
+  const tokens = state.tokens;
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    if (tok.type === 'html_block' && tok.content.includes('data-markov="block"')) {
+      const rest = tok.content.replace(BLOCK_MARKER_RE, '').trim();
+      const next = tokens[i + 1];
+      const setAttr = rest ? null : blockMarkerTarget(tokens, i + 1);
+      if (!setAttr) continue;
+      for (const m of tok.content.matchAll(BLOCK_MARKER_RE)) {
+        const attrs = readMarkerAttrs(m[1]);
+        if (attrs && BLOCK_ATTR[attrs.op]) setAttr(BLOCK_ATTR[attrs.op], attrs.json);
+      }
+      tokens.splice(i, 1);
+      i--;
+      continue;
+    }
+    if (tok.type !== 'inline' || !tok.children) continue;
+    const open = tokens[i - 1];
+    if (!open || (open.type !== 'paragraph_open' && open.type !== 'heading_open')) continue;
+    let found = false;
+    for (;;) {
+      const [a, b] = tok.children;
+      if (!a || !b || a.type !== 'html_inline' || b.type !== 'html_inline' || b.content !== '</span>') break;
+      const m = a.content.match(PARA_MARKER_RE);
+      if (!m) break;
+      const attrs = readMarkerAttrs(m[1]);
+      if (attrs && PARA_ATTR[attrs.op]) open.attrSet(PARA_ATTR[attrs.op], attrs.json);
+      tok.children.splice(0, 2);
+      found = true;
+    }
+    if (found && open.hidden) {
+      // Tight list items hide their <p>; the attribute needs a real element.
+      open.hidden = false;
+      const close = tokens[i + 1];
+      if (close && close.type === 'paragraph_close') close.hidden = false;
+    }
+  }
+});
+
+type MdToken = ReturnType<typeof md.parse>[number];
+
+/**
+ * Where a block marker's attributes go: the following fence / math block /
+ * rule, or the image of a paragraph that holds only an image (block images).
+ */
+function blockMarkerTarget(tokens: MdToken[], j: number): ((name: string, value: string) => void) | null {
+  const next = tokens[j];
+  if (!next) return null;
+  if (['fence', 'katex_block', 'hr', 'code_block'].includes(next.type)) {
+    return (name, value) => next.attrSet(name, value);
+  }
+  const inline = tokens[j + 1];
+  if (next.type !== 'paragraph_open' || inline?.type !== 'inline' || !inline.children) return null;
+  const img = inline.children.find((c) => c.type === 'image' || (c.type === 'html_inline' && /^<img\s/i.test(c.content)));
+  if (!img) return null;
+  if (img.type === 'image') return (name, value) => img.attrSet(name, value);
+  return (name, value) => {
+    img.content = img.content.replace(/^<img\s/i, `<img ${name}="${escapeAttr(value)}" `);
+  };
+}
+
+/** Attributes set by markover_block_changes, rendered onto a custom block element. */
+function blockChangeAttrs(token: { attrGet: (name: string) => string | null }): string {
+  let out = '';
+  for (const name of Object.values(BLOCK_ATTR)) {
+    const v = token.attrGet(name);
+    if (v) out += ` ${name}="${escapeAttr(v)}"`;
+  }
+  return out;
+}
+
 // Custom rule: inline math $...$
 md.inline.ruler.after('escape', 'katex_inline', (state, silent) => {
   if (state.src[state.pos] !== '$' || state.src[state.pos + 1] === '$') return false;
@@ -192,7 +298,7 @@ md.block.ruler.before('fence', 'katex_block', (state, startLine, endLine, silent
 
 md.renderer.rules.katex_block = (tokens, idx) => {
   const math = tokens[idx].content;
-  return `<div data-katex-block="${escapeAttr(math)}">${escapeHtml(math)}</div>\n`;
+  return `<div data-katex-block="${escapeAttr(math)}"${blockChangeAttrs(tokens[idx])}>${escapeHtml(math)}</div>\n`;
 };
 
 // Mermaid: fenced code blocks with language "mermaid" → custom node
@@ -201,9 +307,16 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx];
   if (token.info.trim() === 'mermaid') {
     const code = token.content;
-    return `<div data-mermaid="${escapeAttr(code)}">${escapeHtml(code)}</div>\n`;
+    return `<div data-mermaid="${escapeAttr(code)}"${blockChangeAttrs(token)}>${escapeHtml(code)}</div>\n`;
   }
-  return defaultFence(tokens, idx, options, env, self);
+  // Change attributes belong on <pre> (the code block element), not <code>.
+  const changeAttrs = blockChangeAttrs(token);
+  if (!changeAttrs) return defaultFence(tokens, idx, options, env, self);
+  for (const name of Object.values(BLOCK_ATTR)) {
+    const i = token.attrIndex(name);
+    if (i >= 0) token.attrs?.splice(i, 1);
+  }
+  return defaultFence(tokens, idx, options, env, self).replace(/^<pre/, `<pre${changeAttrs}`);
 };
 
 /**

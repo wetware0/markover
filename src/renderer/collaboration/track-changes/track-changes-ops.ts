@@ -40,6 +40,23 @@ export function collectChanges(doc: PMNode): TrackedChange[] {
       }
       return true;
     }
+    // Whole tracked blocks and paragraph breaks (node attributes).
+    for (const [attr, type, label] of blockChangeAttrs(node)) {
+      const c = node.attrs[attr] as CellChange | null;
+      if (!c) continue;
+      const key = `${type}:${c.changeId}`;
+      let change = byId.get(key);
+      if (!change) {
+        change = { id: c.changeId, type, author: c.author, date: c.date, text: '', from: pos, to: pos };
+        byId.set(key, change);
+      } else {
+        change.text += label === '¶' ? ' ' : ' ¶ ';
+      }
+      change.text += label === '¶' ? '¶ ' : label;
+      change.to = pos + node.nodeSize;
+      // Text that follows in this paragraph continues the same entry.
+      lastBlockById.set(key, node);
+    }
     if (!node.isInline) return true;
     for (const mark of node.marks) {
       const type = mark.type === ins ? 'insertion' : mark.type === del ? 'deletion' : null;
@@ -69,10 +86,42 @@ export function collectChanges(doc: PMNode): TrackedChange[] {
     const last = positions[positions.length - 1];
     change.to = Math.max(change.to ?? 0, last + (doc.nodeAt(last)?.nodeSize ?? 0));
   }
+  for (const change of byId.values()) {
+    if (change.text.endsWith('¶ ')) change.text = change.text.slice(0, -1);
+  }
   return [...byId.values()];
 }
 
 interface CellChange { changeId: string; author: string; date: string }
+
+type ChangeKind = 'insertion' | 'deletion';
+
+/** Change attributes on a block node: [attr, kind, label for the change list]. */
+function blockChangeAttrs(node: PMNode): Array<[string, ChangeKind, string]> {
+  const name = node.type.name;
+  if (name === 'paragraph' || name === 'heading') {
+    return [['markovSplit', 'insertion', '¶'], ['markovJoin', 'deletion', '¶']];
+  }
+  const label = describeBlock(node);
+  if (!label) return [];
+  return [['markovInsert', 'insertion', label], ['markovDelete', 'deletion', label]];
+}
+
+function describeBlock(node: PMNode): string | null {
+  const clip = (s: string) => (s.length > 60 ? `${s.slice(0, 57)}…` : s);
+  switch (node.type.name) {
+    case 'codeBlock': return `[Code block] ${clip(node.textContent.split('\n')[0] ?? '')}`.trimEnd();
+    case 'katexBlock': return `[Math block] ${clip(String(node.attrs.math ?? ''))}`.trimEnd();
+    case 'mermaidBlock': return `[Mermaid diagram] ${clip(String(node.attrs.code ?? '').split('\n')[0] ?? '')}`.trimEnd();
+    case 'image': return `[Image] ${clip(String(node.attrs.alt || node.attrs.src || ''))}`.trimEnd();
+    case 'horizontalRule': return '[Horizontal rule]';
+    default: return null;
+  }
+}
+
+function isTextblockChangeHolder(node: PMNode): boolean {
+  return node.type.name === 'paragraph' || node.type.name === 'heading';
+}
 
 /** "Table", "Table row(s)" or "Table column(s)" for a set of cell positions. */
 function describeCells(doc: PMNode, positions: number[]): string {
@@ -156,7 +205,7 @@ function rangesWithMark(doc: PMNode, pred: (m: Mark) => boolean): Array<Range & 
 }
 
 /** Group ranges into runs separated only by node boundaries (no other inline content). */
-function toRuns(doc: PMNode, ranges: Range[]): Range[] {
+function toRuns(doc: PMNode, ranges: Range[], ignore: (n: PMNode, pos: number) => boolean = () => false): Range[] {
   const sorted = [...ranges].sort((a, b) => a.from - b.from);
   const runs: Range[] = [];
   for (const r of sorted) {
@@ -165,8 +214,9 @@ function toRuns(doc: PMNode, ranges: Range[]): Range[] {
     if (prev) {
       let gapHasInline = false;
       doc.nodesBetween(prev.to, r.from, (n, p) => {
-        if (gapHasInline) return false;
-        if (n.isInline && p + n.nodeSize > prev.to && p < r.from) gapHasInline = true;
+        if (gapHasInline || ignore(n, p)) return false;
+        // Inline content or a leaf block (math, Mermaid, image, rule) in the gap.
+        if ((n.isInline || n.isLeaf) && p + n.nodeSize > prev.to && p < r.from) gapHasInline = true;
         return true;
       });
       if (!gapHasInline) { prev.to = r.to; continue; }
@@ -247,7 +297,46 @@ export function resolveChanges(state: EditorState, ids: ReadonlySet<string> | nu
     if (cellInScope(node.attrs[dropAttr] as CellChange | null)) toDrop.add(pos);
     return true;
   });
+
+  // Whole tracked blocks and paragraph breaks (node attributes). Attribute
+  // updates do not shift positions.
+  const blockOps: Array<{ pos: number; op: 'remove' | 'join'; ws?: string }> = [];
+  state.doc.descendants((node, pos) => {
+    if (node.isInline) return false;
+    const holder = isTextblockChangeHolder(node);
+    if (!holder && !describeBlock(node)) return true;
+    // Paragraph breaks: accept keeps splits and applies joins; reject the reverse.
+    const keepA = holder ? (action === 'accept' ? 'markovSplit' : 'markovJoin') : keepAttr;
+    const dropA = holder ? (action === 'accept' ? 'markovJoin' : 'markovSplit') : dropAttr;
+    const attrs = { ...node.attrs };
+    let changed = false;
+    if (cellInScope(node.attrs[keepA] as CellChange | null)) {
+      attrs[keepA] = null;
+      changed = true;
+    }
+    if (cellInScope(node.attrs[dropA] as CellChange | null)) {
+      blockOps.push({ pos, op: holder ? 'join' : 'remove', ws: (node.attrs[dropA] as { ws?: string } | null)?.ws });
+      if (holder) {
+        attrs[dropA] = null;
+        changed = true;
+      }
+    }
+    if (changed) tr.setNodeMarkup(pos, undefined, attrs);
+    return true;
+  });
+
   if (toDrop.size > 0) dropCells(tr, toDrop);
+
+  // Block removals and paragraph joins, bottom-up so earlier positions stay
+  // valid; the text runs below are mapped through them.
+  for (const { pos, op, ws } of blockOps.sort((a, b) => b.pos - a.pos)) {
+    const original = state.doc.nodeAt(pos);
+    const mapped = tr.mapping.map(pos, 1);
+    const node = tr.doc.nodeAt(mapped);
+    if (!original || !node || node.type !== original.type) continue;
+    if (op === 'remove') removeBlock(tr, mapped, node);
+    else joinWithPrevious(tr, mapped, node, ws);
+  }
 
   for (const r of rangesWithMark(state.doc, (m) => m.type === keepType && inScope(m))) {
     const from = tr.mapping.map(r.from, 1);
@@ -255,10 +344,52 @@ export function resolveChanges(state: EditorState, ids: ReadonlySet<string> | nu
     if (to > from) tr.removeMark(from, to, r.mark);
   }
   const dropPred = (m: Mark) => m.type === dropType && inScope(m);
-  const runs = toRuns(state.doc, rangesWithMark(state.doc, dropPred));
+  // Blocks removed above don't separate runs: text deleted on both sides of a
+  // deleted code block is one deletion and joins up on accept.
+  const removed = new Set(blockOps.filter((o) => o.op === 'remove').map((o) => o.pos));
+  const runs = toRuns(state.doc, rangesWithMark(state.doc, dropPred), (_n, p) => removed.has(p));
   const covered = (n: PMNode) => n.marks.some(dropPred);
   for (let i = runs.length - 1; i >= 0; i--) deleteRun(tr, runs[i], covered);
   return tr;
+}
+
+function removeBlock(tr: Transaction, pos: number, node: PMNode) {
+  try {
+    tr.delete(pos, pos + node.nodeSize);
+  } catch {
+    /* leave it rather than corrupt the document */
+  }
+}
+
+/**
+ * Remove the paragraph break before the textblock at `pos`: merge it into the
+ * previous paragraph/heading at the same depth (an empty one just goes).
+ */
+function joinWithPrevious(tr: Transaction, pos: number, node: PMNode, ws?: string) {
+  let prev: { end: number; pos: number } | null = null;
+  tr.doc.descendants((n, p) => {
+    if (p >= pos) return false;
+    if (n.isTextblock) {
+      if (p + n.nodeSize <= pos) prev = isTextblockChangeHolder(n) ? { end: p + n.nodeSize - 1, pos: p } : null;
+      return false;
+    }
+    return true;
+  });
+  const before = prev as { end: number; pos: number } | null;
+  const depth = tr.doc.resolve(pos).depth;
+  try {
+    if (before && tr.doc.resolve(before.pos).depth === depth) {
+      // Whitespace at the break that did not survive a save comes back.
+      const prevNode = tr.doc.nodeAt(before.pos);
+      const lost = !/\s$/.test(prevNode?.textContent ?? '') && !/^\s/.test(node.textContent);
+      if (ws && lost) tr.insert(pos + 1, tr.doc.type.schema.text(ws));
+      tr.delete(before.end, pos + 1);
+    } else if (node.content.size === 0) {
+      tr.delete(pos, pos + node.nodeSize);
+    }
+  } catch {
+    /* leave the break in place rather than corrupt the document */
+  }
 }
 
 /** Position range of a change (first..last node), for navigation. */
@@ -271,6 +402,15 @@ export function changeRange(doc: PMNode, id: string): Range | null {
     // Inside the cell's first paragraph, so a text selection can resolve.
     if (hit) ranges.push({ from: pos + 2, to: pos + node.nodeSize - 2 });
     return false;
+  });
+  doc.descendants((node, pos) => {
+    if (node.isInline || isTableCell(node)) return false;
+    const hit = blockChangeAttrs(node).some(([attr]) => (node.attrs[attr] as CellChange | null)?.changeId === id);
+    if (hit) {
+      // Textblocks: their content; atom blocks: the node itself.
+      ranges.push(node.isTextblock ? { from: pos + 1, to: pos + node.nodeSize - 1 } : { from: pos, to: pos + node.nodeSize });
+    }
+    return true;
   });
   if (ranges.length === 0) return null;
   return { from: Math.min(...ranges.map((r) => r.from)), to: Math.max(...ranges.map((r) => r.to)) };
