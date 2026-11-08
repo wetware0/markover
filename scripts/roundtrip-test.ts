@@ -35,8 +35,7 @@ import TaskItem from '@tiptap/extension-task-item';
 import Highlight from '@tiptap/extension-highlight';
 import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
-import TableCell from '@tiptap/extension-table-cell';
-import TableHeader from '@tiptap/extension-table-header';
+import { MarkoverTableCell, MarkoverTableHeader } from '../src/renderer/editor/extensions/table-cells';
 
 import { MarkoverImage } from '../src/renderer/editor/extensions/image-editable';
 import { MarkoverCodeBlock } from '../src/renderer/editor/extensions/code-block-lowlight';
@@ -56,39 +55,9 @@ import {
   serializeMarkoverFile,
 } from '../src/shared/markover-codec';
 import { Node as PMNode } from '@tiptap/pm/model';
+import { runCollabCases } from './collab-cases';
 
 // Mirror the editor stack from src/renderer/editor/use-editor.ts.
-// Plain TableCell/TableHeader without the React-only AlignedTable extension
-// (which uses parseHTML on real DOM nodes — jsdom handles that fine but we
-// avoid React imports here).
-const AlignedTableCell = TableCell.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      align: {
-        default: null,
-        parseHTML: (el: HTMLElement) => el.style.textAlign || null,
-        renderHTML: (attrs: { align?: string | null }) =>
-          attrs.align ? { style: `text-align: ${attrs.align}` } : {},
-      },
-    };
-  },
-});
-
-const AlignedTableHeader = TableHeader.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      align: {
-        default: null,
-        parseHTML: (el: HTMLElement) => el.style.textAlign || null,
-        renderHTML: (attrs: { align?: string | null }) =>
-          attrs.align ? { style: `text-align: ${attrs.align}` } : {},
-      },
-    };
-  },
-});
-
 const extensions = [
   StarterKit.configure({
     heading: { levels: [1, 2, 3, 4, 5, 6] },
@@ -103,8 +72,8 @@ const extensions = [
   Highlight.configure({ multicolor: true }),
   Table.configure({ resizable: true }),
   TableRow,
-  AlignedTableCell,
-  AlignedTableHeader,
+  MarkoverTableCell,
+  MarkoverTableHeader,
   KatexInline,
   KatexBlock,
   MermaidBlock,
@@ -701,6 +670,18 @@ for (const c of serializationCases) {
   if (ok) { passed++; console.log('  PASS  pr-diff: identical input has no marks'); }
   else { failed++; failures.push({ name: 'pr-diff identical', input: same, expected: 'no markers', got: out }); console.log('  FAIL  pr-diff: identical input has no marks'); }
 }
+
+// Track changes + comments behaviour (plugin, accept/reject, publish, paste).
+runCollabCases({
+  schema,
+  parse: (md) => PMNode.fromJSON(schema, generateJSON(markdownToHtml(parseMarkoverFile(md).cleanMarkdown), extensions)),
+  record: (name, error) => {
+    if (error === null) { passed++; console.log(`  PASS  ${name}`); return; }
+    failed++;
+    failures.push({ name, input: '(behaviour case)', expected: 'no error', got: error });
+    console.log(`  FAIL  ${name}`);
+  },
+});
 
 console.log(`\n${passed} passed, ${failed} failed (${passed + failed} total)\n`);
 

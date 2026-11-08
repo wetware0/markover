@@ -1,18 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useCommentsStore } from './comment-store';
-import { MessageSquare, Check, Trash2, Send, ChevronDown, ChevronRight } from 'lucide-react';
+import { MessageSquare, Check, Trash2, Send, ChevronDown, ChevronRight, Unlink } from 'lucide-react';
 import type { Comment, CommentStatus } from '../../../shared/markover-codec';
 
 interface CommentsPanelProps {
+  /** Comment ids that still have highlighted text in the document. */
+  anchoredCommentIds: ReadonlySet<string>;
   onNavigateToComment: (commentId: string) => void;
   onDeleteComment: (commentId: string) => void;
+  /** Return focus to the editor after an action. */
+  onAfterAction: () => void;
 }
 
-export function CommentsPanel({ onNavigateToComment, onDeleteComment }: CommentsPanelProps) {
+/** Mouse clicks on panel buttons must not pull focus away from the editor. */
+const keepEditorFocus = (e: React.MouseEvent) => e.preventDefault();
+
+export function CommentsPanel({ anchoredCommentIds, onNavigateToComment, onDeleteComment, onAfterAction }: CommentsPanelProps) {
   const { comments, activeCommentId, setActiveComment, addReply, setStatus } = useCommentsStore();
   const [filter, setFilter] = useState<'all' | CommentStatus>('all');
 
   const filtered = filter === 'all' ? comments : comments.filter((c) => c.status === filter);
+  const after = (fn: () => void) => () => { fn(); onAfterAction(); };
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -44,14 +52,15 @@ export function CommentsPanel({ onNavigateToComment, onDeleteComment }: Comments
               key={comment.id}
               comment={comment}
               isActive={comment.id === activeCommentId}
+              detached={!anchoredCommentIds.has(comment.id)}
               onActivate={() => {
                 setActiveComment(comment.id);
                 onNavigateToComment(comment.id);
               }}
-              onReply={(content) => addReply(comment.id, content)}
-              onResolve={() => setStatus(comment.id, 'resolved')}
-              onReopen={() => setStatus(comment.id, 'open')}
-              onDelete={() => onDeleteComment(comment.id)}
+              onReply={(content) => { addReply(comment.id, content); onAfterAction(); }}
+              onResolve={after(() => setStatus(comment.id, 'resolved'))}
+              onReopen={after(() => setStatus(comment.id, 'open'))}
+              onDelete={after(() => onDeleteComment(comment.id))}
             />
           ))
         )}
@@ -63,6 +72,8 @@ export function CommentsPanel({ onNavigateToComment, onDeleteComment }: Comments
 interface CommentThreadProps {
   comment: Comment;
   isActive: boolean;
+  /** The commented text no longer exists in the document. */
+  detached: boolean;
   onActivate: () => void;
   onReply: (content: string) => void;
   onResolve: () => void;
@@ -73,6 +84,7 @@ interface CommentThreadProps {
 function CommentThread({
   comment,
   isActive,
+  detached,
   onActivate,
   onReply,
   onResolve,
@@ -81,6 +93,12 @@ function CommentThread({
 }: CommentThreadProps) {
   const [replyText, setReplyText] = useState('');
   const [expanded, setExpanded] = useState(true);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Caret moved into this thread's text (or the text was clicked): show it.
+  useEffect(() => {
+    if (isActive) rootRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [isActive]);
 
   const handleReply = () => {
     if (!replyText.trim()) return;
@@ -96,24 +114,36 @@ function CommentThread({
 
   return (
     <div
-      className={`border-b border-gray-200 dark:border-gray-700 ${isActive ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-gray-50 dark:hover:bg-gray-750'}`}
+      ref={rootRef}
+      data-comment-thread={comment.id}
+      data-active={isActive ? 'true' : undefined}
+      className={`markover-comment-thread border-b border-gray-200 dark:border-gray-700 ${isActive ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-gray-50 dark:hover:bg-gray-750'}`}
       onClick={onActivate}
     >
       <div className="px-3 py-2">
         {/* Header */}
         <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
+              onMouseDown={keepEditorFocus}
               onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
               className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
             >
               {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
-            <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{comment.author}</span>
+            <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{comment.author}</span>
             <span className={`text-xs px-1.5 py-0.5 rounded ${statusColor}`}>
               {comment.status}
             </span>
+            {detached && (
+              <span
+                className="markover-comment-detached flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                title="The text this comment was attached to has been deleted. The thread is kept until you delete it."
+              >
+                <Unlink size={10} /> text deleted
+              </span>
+            )}
           </div>
           <span className="text-xs text-gray-400">
             {formatDate(comment.date)}
@@ -142,13 +172,21 @@ function CommentThread({
                 type="text"
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleReply()}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  // Focus moves to the editor on submit; without preventDefault
+                  // the Enter would then split the paragraph (or replace the
+                  // selected commented text) in the document.
+                  e.preventDefault();
+                  handleReply();
+                }}
                 onClick={(e) => e.stopPropagation()}
                 placeholder="Reply..."
                 className="flex-1 text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
               />
               <button
                 type="button"
+                onMouseDown={keepEditorFocus}
                 onClick={(e) => { e.stopPropagation(); handleReply(); }}
                 disabled={!replyText.trim()}
                 className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900 rounded disabled:opacity-30"
@@ -162,6 +200,7 @@ function CommentThread({
               {comment.status === 'open' || comment.status === 'pending' ? (
                 <button
                   type="button"
+                  onMouseDown={keepEditorFocus}
                   onClick={(e) => { e.stopPropagation(); onResolve(); }}
                   className="flex items-center gap-1 text-xs text-green-600 hover:bg-green-50 rounded px-1.5 py-0.5"
                 >
@@ -170,6 +209,7 @@ function CommentThread({
               ) : (
                 <button
                   type="button"
+                  onMouseDown={keepEditorFocus}
                   onClick={(e) => { e.stopPropagation(); onReopen(); }}
                   className="flex items-center gap-1 text-xs text-blue-600 hover:bg-blue-50 rounded px-1.5 py-0.5"
                 >
@@ -178,6 +218,7 @@ function CommentThread({
               )}
               <button
                 type="button"
+                onMouseDown={keepEditorFocus}
                 onClick={(e) => { e.stopPropagation(); onDelete(); }}
                 className="flex items-center gap-1 text-xs text-red-500 hover:bg-red-50 rounded px-1.5 py-0.5"
               >
