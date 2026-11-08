@@ -26,10 +26,14 @@ All notable changes to Markover are documented here.
 - Publish now handles comments placed on tracked changes and deletions containing comments or formatting; previously nested markup could leave stray `<span>` tags in the published file.
 - Pasting copied tracked or commented text no longer duplicates change or comment ids (pasted text is plain, and copied deleted text is dropped).
 - After toolbar or sidebar actions (accept/reject, resolve/reopen/reply/delete, sidebar tabs and toggle) focus returns to the editor, so the next keystroke lands in the document.
+- **Math now renders with KaTeX's own fonts.** The KaTeX font files were never bundled into the app, so formulas fell back to system fonts: integral signs were tiny and limits were misplaced. This affected every earlier release.
 
 ### Internal
 
 - Track-changes logic is now a pure `trackTransactions` function plus `track-changes-ops.ts` (collect, accept/reject, publish), so the headless suite drives the real plugin with prosemirror-history. Added 42 behaviour cases to `scripts/roundtrip-test.ts` and new Playwright specs for slow-typing coalescing, table row/column/table insert and delete with accept/reject, word deletion, undo, accept/reject, save/reopen, and comment flows.
+- New end-to-end coverage for rich content: a file with a table (alignment, inline formatting, escaped pipes, links), a local image, a Mermaid diagram with math in a node, and inline and block math is opened, checked, edited, saved, reopened and saved again with byte-identical output.
+- New end-to-end coverage for table editing: insert rows above and below, insert columns before and after, delete a row, delete a column and delete the whole table, checking the saved Markdown after each step.
+- Pinned `prosemirror-transform` to a single copy (^1.12.5) via npm override. The 1.1.4 lockfile reset had left TipTap with its own nested copy, so editor steps failed `instanceof` checks against it.
 
 ---
 
