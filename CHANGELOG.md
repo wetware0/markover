@@ -4,6 +4,24 @@ All notable changes to Markover are documented here.
 
 ---
 
+## [1.1.4](https://github.com/wetware0/markover/compare/v1.1.3...v1.1.4) - 2026-11-08
+
+### Security
+
+- **Patched 26 Dependabot advisories in libraries that ship with the app**, including one critical. These libraries read and display every file you open, so all users should update.
+  - `dompurify` 3.4.10 → 3.4.17 (critical and high: [GHSA-cg2g-xh64-v4q7](https://github.com/advisories/GHSA-cg2g-xh64-v4q7), [GHSA-mrv2-3pqr-j5jr](https://github.com/advisories/GHSA-mrv2-3pqr-j5jr), plus four lower-severity fixes), via the existing npm override.
+  - `markdown-it` 14.1.1 → 14.3.3 and `linkify-it` 5.0.0 → 5.0.2 (override), clearing two high and three lower-severity parser advisories.
+  - All `@tiptap/*` packages 3.23.4 → 3.33.0, and `prosemirror-view` → 1.42.9 (override).
+  - `nanoid` 5.1.6 → 5.1.16, `mermaid` 11.15.0 → 11.17.2, and `katex` 0.16.38 → 0.18.10 (also forced for Mermaid's internal copy via override).
+- `npm audit --omit=dev` now reports 0 vulnerabilities. Build-only tooling alerts are not included in the packaged app and are unchanged.
+
+### Internal
+
+- Fixed a race in the "typed prices survive saving and reopening" e2e test: it now waits for the save to finish before starting a new document.
+- Verified with 103 roundtrip tests, 5 GitHub unit tests and 41 Electron end-to-end tests. Upgrading TipTap also removed 4 of the 10 existing TypeScript strict-mode errors.
+
+---
+
 ## [1.1.3](https://github.com/wetware0/markover/compare/v1.1.2...v1.1.3) - 2026-10-15
 
 ### Fixed
