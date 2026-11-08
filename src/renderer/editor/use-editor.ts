@@ -60,6 +60,42 @@ import { MarkovDelete } from './extensions/markover-delete';
 import { TrackChangesPlugin } from './extensions/track-changes-plugin';
 import { FindReplaceExtension } from './extensions/find-replace-extension';
 
+// Built once at module load. @tiptap/react compares `extensions` by instance
+// on every render; `X.configure()` inside the hook would yield new instances
+// each render, so every App re-render called editor.setOptions(), which
+// re-applies editor state and can overwrite a DOM selection change (an arrow
+// key, Home/End) that ProseMirror had not read yet.
+const EDITOR_EXTENSIONS = [
+  StarterKit.configure({
+    heading: { levels: [1, 2, 3, 4, 5, 6] },
+    codeBlock: false, // replaced by MarkoverCodeBlock (lowlight + React node view)
+  }),
+  MarkoverCodeBlock,
+  Underline,
+  Placeholder.configure({ placeholder: 'Start writing…' }),
+  Link.configure({ openOnClick: false, autolink: true }),
+  MarkoverImage,
+  MarkoverTaskList,
+  TaskItem.configure({ nested: true }),
+  Highlight.configure({ multicolor: true }),
+  Table.configure({ resizable: true }),
+  TableRow,
+  AlignedTableCell,
+  AlignedTableHeader,
+  KatexInline,
+  KatexBlock,
+  MermaidBlock,
+  FootnoteRef,
+  FootnoteBlock,
+  FrontMatter,
+  ImageDrop,
+  MarkovHighlight,
+  MarkovInsert,
+  MarkovDelete,
+  TrackChangesPlugin,
+  FindReplaceExtension,
+];
+
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
@@ -94,36 +130,7 @@ export function useMarkoverEditor() {
   );
 
   const editor = useTipTapEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3, 4, 5, 6] },
-        codeBlock: false, // replaced by MarkoverCodeBlock (lowlight + React node view)
-      }),
-      MarkoverCodeBlock,
-      Underline,
-      Placeholder.configure({ placeholder: 'Start writing…' }),
-      Link.configure({ openOnClick: false, autolink: true }),
-      MarkoverImage,
-      MarkoverTaskList,
-      TaskItem.configure({ nested: true }),
-      Highlight.configure({ multicolor: true }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      AlignedTableCell,
-      AlignedTableHeader,
-      KatexInline,
-      KatexBlock,
-      MermaidBlock,
-      FootnoteRef,
-      FootnoteBlock,
-      FrontMatter,
-      ImageDrop,
-      MarkovHighlight,
-      MarkovInsert,
-      MarkovDelete,
-      TrackChangesPlugin,
-      FindReplaceExtension,
-    ],
+    extensions: EDITOR_EXTENSIONS,
     content: '',
     onUpdate: ({ editor }) => {
       updateStats(editor);

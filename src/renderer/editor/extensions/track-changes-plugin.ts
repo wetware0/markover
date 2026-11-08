@@ -1,12 +1,343 @@
 import { Extension } from '@tiptap/core';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
+import type { EditorState, Transaction } from '@tiptap/pm/state';
+import { Mapping, ReplaceStep } from '@tiptap/pm/transform';
+import type { StepMap } from '@tiptap/pm/transform';
+import { Fragment, Slice } from '@tiptap/pm/model';
+import type { Mark, MarkType, Node as PMNode, NodeType } from '@tiptap/pm/model';
 import { nanoid } from 'nanoid';
 
 export const trackChangesPluginKey = new PluginKey('trackChanges');
 
-interface TrackChangesPluginState {
+/** Transactions carrying this meta are never (re-)tracked. */
+export const TRACK_CHANGES_PROCESSED = 'trackChangesProcessed';
+
+/** prosemirror-history tags undo/redo transactions with its plugin key ("history$"). */
+const HISTORY_META = 'history$';
+
+export interface TrackChangesConfig {
   enabled: boolean;
   author: string;
+}
+
+export interface TrackChangesOptions {
+  /** Override for tests: today's date as YYYY-MM-DD. */
+  today?: () => string;
+  /** Override for tests: change-id generator. */
+  newId?: () => string;
+  /** Called when an edit could not be represented as a tracked change. */
+  onUntrackedEdit?: () => void;
+}
+
+/*
+ * Coalescing rules (Word / Google Docs style). Grouping is derived from the
+ * document itself rather than from in-memory "last keystroke" state, so it is
+ * independent of typing speed, undo history, cursor moves and reloads:
+ *
+ *  1. New text joins an existing insertion when it touches (is directly left
+ *     or right of) an insertion by the SAME author. The existing mark is reused
+ *     verbatim (same id/author/date), so ProseMirror merges the text nodes and
+ *     the change list shows one entry. Otherwise a fresh insertion id is minted.
+ *  2. Deleting untracked text re-inserts it as "ghost" text with a deletion
+ *     mark. The ghost joins an adjacent deletion by the same author (either
+ *     side), so backspacing or forward-deleting over a word is one change.
+ *  3. Deleting text that is the author's OWN pending insertion removes it for
+ *     real: there is nothing to review.
+ *  4. Deleting someone else's insertion marks it deleted (it keeps their
+ *     insertion mark as well), so accepting/rejecting works for both parties.
+ *  5. Existing ghost text is never deleted by editing. A collapsed Backspace or
+ *     Delete over it skips the whole ghost run and deletes the next visible
+ *     character instead, which then coalesces with that run (rule 2).
+ *  6. Typing over a selection yields an adjacent deletion followed by an
+ *     insertion; the caret stays after the inserted text.
+ *  7. After a collapsed Backspace the caret sits BEFORE the new ghost text so
+ *     the next Backspace extends the same deletion leftwards; after Delete (or
+ *     a range deletion) it sits after it.
+ *
+ * No time window is used: two edits only coalesce when they are physically
+ * adjacent and by the same author, which is exactly what "one change" means in
+ * a review UI. Undo/redo transactions are never re-tracked; the marks added
+ * here are appended to the same history event, so undo removes them together
+ * with the edit that produced them.
+ */
+export function trackTransactions(
+  transactions: readonly Transaction[],
+  oldState: EditorState,
+  newState: EditorState,
+  config: TrackChangesConfig,
+  options: TrackChangesOptions = {},
+): Transaction | null {
+  if (!config.enabled) return null;
+  const schema = newState.schema;
+  const insType = schema.marks.markovInsert;
+  const delType = schema.marks.markovDelete;
+  if (!insType || !delType) return null;
+
+  const isTracked = (tr: Transaction) =>
+    tr.docChanged && !tr.getMeta(TRACK_CHANGES_PROCESSED) && !tr.getMeta(HISTORY_META);
+  if (!transactions.some(isTracked)) return null;
+
+  const author = config.author;
+  const today = options.today ?? (() => new Date().toISOString().split('T')[0]);
+  const newId = options.newId ?? (() => nanoid(8));
+
+  // Flatten every step of every transaction in this batch so positions from an
+  // early step can be mapped into newState.doc.
+  interface StepRef { step: ReplaceStep; docBefore: PMNode; mapIndex: number }
+  const maps: StepMap[] = [];
+  const refs: StepRef[] = [];
+  for (const t of transactions) {
+    const tracked = isTracked(t);
+    t.steps.forEach((step, i) => {
+      // ReplaceAroundStep (wrap/lift/set block type) and mark steps are
+      // formatting/structure, not content; they pass through untracked.
+      if (tracked && step instanceof ReplaceStep) {
+        refs.push({ step, docBefore: t.docs[i], mapIndex: maps.length });
+      }
+      maps.push(step.getMap());
+    });
+  }
+  if (refs.length === 0) return null;
+
+  const tr = newState.tr;
+  tr.setMeta(TRACK_CHANGES_PROCESSED, true);
+  let untracked = false;
+  const insertions: Array<{ from: number; to: number }> = [];
+  let caret: number | null = null;
+
+  const isOwnInsert = (marks: readonly Mark[]) =>
+    marks.some((m) => m.type === insType && m.attrs.author === author);
+  const isGhost = (marks: readonly Mark[]) => marks.some((m) => m.type === delType);
+  const ownDeleteMark = (node: PMNode | null | undefined) =>
+    node?.marks.find((m) => m.type === delType && m.attrs.author === author) ?? null;
+
+  const singleStep = refs.length === 1 && transactions.filter(isTracked).length === 1;
+  const oldSel = oldState.selection;
+
+  for (const ref of refs) {
+    const { step, docBefore } = ref;
+    const rest = new Mapping(maps.slice(ref.mapIndex + 1));
+    const { from, to, slice } = step;
+
+    // Deleted content → restore as ghost text.
+    if (to > from) {
+      const deleted = docBefore.slice(from, to);
+      const pos = tr.mapping.map(rest.map(from, -1), -1);
+      const backspace = singleStep && slice.size === 0 && oldSel.empty && oldSel.from === to;
+      const forwardDelete = singleStep && slice.size === 0 && oldSel.empty && oldSel.from === from;
+      const ghostOnly = hasInline(deleted.content) && allInline(deleted.content, (n) => isGhost(n.marks));
+
+      if (ghostOnly && (backspace || forwardDelete)) {
+        // Rule 5: restore the ghost, skip past its run, delete the next char.
+        tr.replace(pos, pos, deleted);
+        const after = pos + deleted.size;
+        caret = skipGhostAndDelete(tr, backspace ? pos : after, backspace ? -1 : 1);
+        continue;
+      }
+
+      const $from = docBefore.resolve(from);
+      const parentType = $from.node($from.sharedDepth(to)).type;
+      const $pos = tr.doc.resolve(pos);
+      const reuse =
+        ownDeleteMark($pos.nodeBefore) ??
+        ownDeleteMark($pos.nodeAfter) ??
+        findInFragment(deleted.content, (n) => ownDeleteMark(n));
+      const delMark = reuse ?? delType.create({ changeId: newId(), author, date: today() });
+
+      const ghost = toGhost(deleted, parentType, delMark, true);
+      if (ghost === 'unmarkable') {
+        untracked = true;
+      } else if (ghost) {
+        try {
+          tr.replace(pos, pos, ghost);
+          if (backspace) caret = pos;
+        } catch {
+          // Dropping own insertions produced a shape that won't fit — retry
+          // keeping them (as deleted text) before giving up on tracking.
+          const full = toGhost(deleted, parentType, delMark, false);
+          try {
+            if (full && full !== 'unmarkable') {
+              tr.replace(pos, pos, full);
+              if (backspace) caret = pos;
+            } else {
+              untracked = true;
+            }
+          } catch {
+            untracked = true;
+          }
+        }
+      }
+    }
+
+    // Inserted content → record its range in newState coordinates.
+    if (slice.size > 0 && hasInline(slice.content)) {
+      insertions.push({ from: rest.map(from, 1), to: rest.map(from + slice.size, -1) });
+    }
+  }
+
+  // Mark insertions (after restorations, so ghosts typed over sit before them).
+  for (const range of insertions) {
+    const a = tr.mapping.map(range.from, 1);
+    const b = tr.mapping.map(range.to, -1);
+    if (b <= a) continue;
+    const before = tr.doc.resolve(a).nodeBefore;
+    const after = tr.doc.resolve(b).nodeAfter;
+    const own = (n: PMNode | null | undefined) =>
+      n?.marks.find((m) => m.type === insType && m.attrs.author === author) ?? null;
+    const mark = own(before) ?? own(after) ?? insType.create({ changeId: newId(), author, date: today() });
+    // Typed text can inherit someone's insertion or a ghost's deletion mark
+    // when the caret is inside that span; new text is only ever "inserted by me".
+    tr.removeMark(a, b, insType);
+    tr.removeMark(a, b, delType);
+    tr.addMark(a, b, mark);
+  }
+
+  if (caret !== null) {
+    try {
+      tr.setSelection(TextSelection.create(tr.doc, caret));
+    } catch {
+      /* leave the mapped selection */
+    }
+  }
+
+  if (untracked) options.onUntrackedEdit?.();
+  return tr.docChanged ? tr : null;
+
+  // --- helpers (hoisted) ---
+
+  function skipGhostAndDelete(t: Transaction, start: number, dir: -1 | 1): number {
+    let p = start;
+    // Walk across the contiguous ghost run within the textblock.
+    for (;;) {
+      const $p = t.doc.resolve(p);
+      const n = dir < 0 ? $p.nodeBefore : $p.nodeAfter;
+      if (!n || !n.isText || !isGhost(n.marks)) break;
+      p += dir * n.nodeSize;
+    }
+    const $p = t.doc.resolve(p);
+    const n = dir < 0 ? $p.nodeBefore : $p.nodeAfter;
+    if (!n || !n.isText || !n.text) return p;
+    // One character (keep surrogate pairs whole).
+    const text = n.text;
+    const ch = dir < 0 ? text.slice(-2) : text.slice(0, 2);
+    const len = ch.length === 2 && /[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(ch) ? 2 : 1;
+    const a = dir < 0 ? p - len : p;
+    const b = dir < 0 ? p : p + len;
+    if (isOwnInsert(n.marks)) {
+      t.delete(a, b);
+      return a;
+    }
+    const $a = t.doc.resolve(a);
+    if (!$a.parent.type.allowsMarkType(delType)) return p;
+    const mark =
+      ownDeleteMark(dir < 0 ? t.doc.resolve(b).nodeAfter : t.doc.resolve(a).nodeBefore) ??
+      delType.create({ changeId: newId(), author, date: today() });
+    t.addMark(a, b, mark);
+    return dir < 0 ? a : b;
+  }
+
+  function toGhost(
+    deleted: Slice,
+    parentType: NodeType,
+    delMark: Mark,
+    dropOwnInserts: boolean,
+  ): Slice | null | 'unmarkable' {
+    let unmarkable = false;
+    const mapFragment = (frag: Fragment, parent: NodeType, depth: number): Fragment => {
+      const out: PMNode[] = [];
+      frag.forEach((child, _offset, index) => {
+        if (child.isInline) {
+          if (dropOwnInserts && isOwnInsert(child.marks)) return;
+          if (isGhost(child.marks)) { out.push(child); return; }
+          if (!parent.allowsMarkType(delType)) { unmarkable = true; out.push(child); return; }
+          out.push(child.mark(delMark.addToSet(child.marks)));
+          return;
+        }
+        const isOpenEdge =
+          (index === 0 && depth < deleted.openStart) ||
+          (index === frag.childCount - 1 && depth < deleted.openEnd);
+        const content = mapFragment(child.content, child.type, depth + 1);
+        // A closed textblock whose text was entirely the author's own insertion
+        // disappears with it rather than leaving an empty paragraph behind.
+        if (!isOpenEdge && child.isTextblock && child.content.size > 0 && content.size === 0) return;
+        out.push(child.copy(content));
+      });
+      return Fragment.from(out);
+    };
+    const content = mapFragment(deleted.content, parentType, 0);
+    if (unmarkable) return 'unmarkable';
+    if (!hasInline(content)) return null;
+    return new Slice(content, deleted.openStart, deleted.openEnd);
+  }
+}
+
+function hasInline(frag: Fragment): boolean {
+  let found = false;
+  frag.descendants((n) => {
+    if (found) return false;
+    if (n.isInline) { found = true; return false; }
+    return true;
+  });
+  return found;
+}
+
+function allInline(frag: Fragment, pred: (n: PMNode) => boolean): boolean {
+  let ok = true;
+  frag.descendants((n) => {
+    if (!ok) return false;
+    if (n.isInline) { if (!pred(n)) ok = false; return false; }
+    return true;
+  });
+  return ok;
+}
+
+function findInFragment<T>(frag: Fragment, fn: (n: PMNode) => T | null): T | null {
+  let result: T | null = null;
+  frag.descendants((n) => {
+    if (result) return false;
+    if (n.isInline) { result = fn(n); return false; }
+    return true;
+  });
+  return result;
+}
+
+/**
+ * Strip collaboration marks from pasted content. Copied tracked text would
+ * otherwise duplicate change/comment ids at a second location (accepting one
+ * would silently accept the other), and copied ghost text would paste as
+ * "already deleted".
+ */
+export function stripCollaborationMarksFromSlice(slice: Slice, schema: { marks: Record<string, MarkType> }): Slice {
+  const del = schema.marks.markovDelete;
+  const strip = [schema.marks.markovInsert, schema.marks.markovDelete, schema.marks.markovHighlight].filter(Boolean);
+  const mapFragment = (frag: Fragment): Fragment => {
+    const out: PMNode[] = [];
+    frag.forEach((child) => {
+      if (child.isInline) {
+        if (del && child.marks.some((m) => m.type === del)) return;
+        out.push(child.mark(child.marks.filter((m) => !strip.includes(m.type))));
+        return;
+      }
+      out.push(child.copy(mapFragment(child.content)));
+    });
+    return Fragment.from(out);
+  };
+  return new Slice(mapFragment(slice.content), slice.openStart, slice.openEnd);
+}
+
+export function createTrackChangesPlugin(
+  getConfig: () => TrackChangesConfig,
+  options: TrackChangesOptions = {},
+): Plugin {
+  return new Plugin({
+    key: trackChangesPluginKey,
+    props: {
+      transformPasted: (slice, view) => stripCollaborationMarksFromSlice(slice, view.state.schema),
+    },
+    appendTransaction(transactions, oldState, newState) {
+      return trackTransactions(transactions, oldState, newState, getConfig(), options);
+    },
+  });
 }
 
 export const TrackChangesPlugin = Extension.create({
@@ -16,230 +347,24 @@ export const TrackChangesPlugin = Extension.create({
     return {
       enabled: false,
       author: 'User',
-      // Grouping state: reuse the same changeId for consecutive characters
-      // typed at adjacent positions, so "hello" becomes one tracked change
-      // rather than five separate ones.
-      currentInsertId: null as string | null,
-      lastInsertEnd: null as number | null,
     };
   },
 
   addProseMirrorPlugins() {
     const editor = this.editor;
     const extensionName = this.name;
-
     return [
-      new Plugin({
-        key: trackChangesPluginKey,
-
-        state: {
-          init(): TrackChangesPluginState {
-            return { enabled: false, author: 'User' };
-          },
-          apply(): TrackChangesPluginState {
-            const s = editor.storage[extensionName] as TrackChangesPluginState;
-            return { enabled: s.enabled, author: s.author };
+      createTrackChangesPlugin(
+        () => (editor.storage as unknown as Record<string, TrackChangesConfig>)[extensionName],
+        {
+          onUntrackedEdit: () => {
+            // A tracked document must never contain silent, invisible edits.
+            if (typeof document !== 'undefined') {
+              document.dispatchEvent(new CustomEvent('markover:untracked-edit'));
+            }
           },
         },
-
-        appendTransaction(transactions, oldState, newState) {
-          const storage = editor.storage[extensionName] as TrackChangesPluginState & {
-            currentInsertId: string | null;
-            lastInsertEnd: number | null;
-          };
-          if (!storage.enabled) return null;
-
-          const userTx = transactions.find(
-            (tr) => tr.docChanged && !tr.getMeta('trackChangesProcessed'),
-          );
-          if (!userTx) return null;
-
-          const author = storage.author;
-          const date = new Date().toISOString().split('T')[0];
-          const tr = newState.tr;
-          tr.setMeta('trackChangesProcessed', true);
-
-          let hasChanges = false;
-          let insertionOffset = 0;
-          // When a step in this transaction skips a deletion of tracked text (e.g. the
-          // inversion of a markovDelete re-insertion during undo), any subsequent
-          // insertion in the same transaction is the undo restoring the original text —
-          // not a new user edit — and must not receive a markovInsert mark.
-          let skippedTrackedDeletion = false;
-
-          userTx.steps.forEach((step) => {
-            step.getMap().forEach((oldStart, oldEnd, newStart, newEnd) => {
-              const adjNewStart = newStart + insertionOffset;
-              const adjNewEnd = newEnd + insertionOffset;
-
-              // Text was inserted — group consecutive keystrokes into one change.
-              // Skip if we already skipped a tracked deletion in this transaction:
-              // that means this insertion is the undo restoring the original text.
-              if (newEnd > newStart && !skippedTrackedDeletion) {
-                let changeId: string;
-                if (storage.currentInsertId && storage.lastInsertEnd === newStart) {
-                  // Continuation of an existing insert run — reuse the same id
-                  changeId = storage.currentInsertId;
-                } else {
-                  // New insert run (cursor moved, deletion intervened, etc.)
-                  changeId = nanoid(8);
-                }
-                storage.currentInsertId = changeId;
-                storage.lastInsertEnd = newEnd;
-
-                const insertMark = newState.schema.marks.markovInsert.create({
-                  changeId,
-                  author,
-                  date,
-                });
-                tr.addMark(adjNewStart, adjNewEnd, insertMark);
-                hasChanges = true;
-              }
-
-              // Text was deleted — break the insert grouping run
-              if (oldEnd > oldStart) {
-                storage.currentInsertId = null;
-                storage.lastInsertEnd = null;
-                try {
-                  // Determine whether the deleted range contains tracked marks and/or
-                  // block-level nodes (tables, code blocks, etc.).
-                  let hasTrackedNodes = false;
-                  oldState.doc.nodesBetween(oldStart, oldEnd, (node) => {
-                    if (!node.isText) return true;
-                    if (node.marks.some((m) => m.type.name === 'markovInsert' || m.type.name === 'markovDelete')) {
-                      hasTrackedNodes = true;
-                      return false;
-                    }
-                  });
-
-                  if (hasTrackedNodes) {
-                    // Flag so any paired restoration insertion in this transaction
-                    // (i.e. undo of a tracked deletion) is not marked as a new edit.
-                    skippedTrackedDeletion = true;
-
-                    // Mixed range: still track the untracked text portions
-                    let untrackedText = '';
-                    oldState.doc.nodesBetween(oldStart, oldEnd, (node, pos) => {
-                      if (!node.isText || !node.text) return true;
-                      if (!node.marks.some((m) => m.type.name === 'markovInsert' || m.type.name === 'markovDelete')) {
-                        const s = Math.max(pos, oldStart);
-                        const e = Math.min(pos + node.nodeSize, oldEnd);
-                        untrackedText += node.text.slice(s - pos, e - pos);
-                      }
-                    });
-                    if (untrackedText) {
-                      const changeId = nanoid(8);
-                      const deleteMark = newState.schema.marks.markovDelete.create({ changeId, author, date });
-                      tr.insert(adjNewEnd, newState.schema.text(untrackedText, [deleteMark]));
-                      insertionOffset += untrackedText.length;
-                      hasChanges = true;
-                    }
-                  } else {
-                    // Pure untracked deletion — check for block-level content
-                    const slice = oldState.doc.slice(oldStart, oldEnd);
-                    let hasBlocks = false;
-                    slice.content.forEach((node) => { if (node.isBlock) hasBlocks = true; });
-
-                    if (hasBlocks) {
-                      const changeId = nanoid(8);
-                      const deleteMark = newState.schema.marks.markovDelete.create({ changeId, author, date });
-
-                      if (slice.openStart === 0 && slice.openEnd === 0) {
-                        // Clean block deletion (selection at exact block boundaries):
-                        // re-insert original nodes and mark all inline text within.
-                        tr.insert(adjNewEnd, slice.content);
-                        tr.addMark(adjNewEnd, adjNewEnd + slice.content.size, deleteMark);
-                        insertionOffset += slice.content.size;
-                        hasChanges = true;
-                      } else {
-                        // Selection crossed a paragraph boundary (openStart/openEnd > 0).
-                        // Inserting slice.content at a mid-paragraph position is invalid.
-                        // Split into three parts:
-                        //   1. Inline ghost text for the partial first paragraph
-                        //   2. Complete block nodes (table, code block, etc.) re-inserted
-                        //      just after the merged paragraph
-                        //   3. Ghost paragraph for the partial last paragraph
-                        const $fromOld = oldState.doc.resolve(oldStart);
-                        const $toOld = oldState.doc.resolve(oldEnd);
-
-                        // 1. Inline text from partial first paragraph (selection start → para end)
-                        const firstInlineText = slice.openStart > 0 && $fromOld.depth >= 1
-                          ? oldState.doc.textBetween(oldStart, Math.min($fromOld.end(1), oldEnd), '\n')
-                          : '';
-
-                        // Range of complete blocks between the partial first/last paragraphs
-                        const blocksStart = slice.openStart > 0 && $fromOld.depth >= 1
-                          ? $fromOld.after(1) : oldStart;
-                        const blocksEnd = slice.openEnd > 0 && $toOld.depth >= 1
-                          ? $toOld.before(1) : oldEnd;
-
-                        // 1. Insert inline ghost text for the partial first paragraph
-                        if (firstInlineText) {
-                          tr.insert(adjNewEnd, newState.schema.text(firstInlineText, [deleteMark]));
-                          insertionOffset += firstInlineText.length;
-                          hasChanges = true;
-                        }
-
-                        // Insertion point for block-level ghost content:
-                        // - openStart > 0: we are inside a merged paragraph → go after it
-                        // - openStart = 0: newEnd is already at a block boundary
-                        const insertBlocksAt = slice.openStart > 0
-                          ? newState.doc.resolve(newEnd).after(1) + insertionOffset
-                          : newEnd + insertionOffset;
-
-                        // 2. Re-insert complete block nodes
-                        let insertedBlocksSize = 0;
-                        if (blocksStart < blocksEnd) {
-                          const blockSlice = oldState.doc.slice(blocksStart, blocksEnd);
-                          if (blockSlice.openStart === 0 && blockSlice.openEnd === 0 && blockSlice.content.size > 0) {
-                            tr.insert(insertBlocksAt, blockSlice.content);
-                            tr.addMark(insertBlocksAt, insertBlocksAt + blockSlice.content.size, deleteMark);
-                            insertedBlocksSize = blockSlice.content.size;
-                            insertionOffset += insertedBlocksSize;
-                            hasChanges = true;
-                          }
-                        }
-
-                        // 3. Re-insert partial last paragraph as a ghost paragraph node
-                        if (slice.openEnd > 0 && $toOld.depth >= 1) {
-                          const lastInlineText = oldState.doc.textBetween($toOld.start(1), oldEnd, '\n');
-                          if (lastInlineText) {
-                            const textNode = newState.schema.text(lastInlineText, [deleteMark]);
-                            const paraNode = newState.schema.nodes.paragraph.create({}, textNode);
-                            const insertLastAt = insertBlocksAt + insertedBlocksSize;
-                            tr.insert(insertLastAt, paraNode);
-                            insertionOffset += paraNode.nodeSize;
-                            hasChanges = true;
-                          }
-                        }
-                      }
-                    } else {
-                      // Pure inline text deletion
-                      const deletedText = oldState.doc.textBetween(oldStart, oldEnd, '\n');
-                      if (deletedText) {
-                        const changeId = nanoid(8);
-                        const deleteMark = newState.schema.marks.markovDelete.create({ changeId, author, date });
-                        tr.insert(adjNewEnd, newState.schema.text(deletedText, [deleteMark]));
-                        insertionOffset += deletedText.length;
-                        hasChanges = true;
-                      }
-                    }
-                  }
-                } catch {
-                  // Structural change we can't track cleanly (e.g. node split).
-                  // Let the edit through but warn — a tracked document must never
-                  // contain silent, invisible edits.
-                  if (typeof document !== 'undefined') {
-                    document.dispatchEvent(new CustomEvent('markover:untracked-edit'));
-                  }
-                }
-              }
-            });
-          });
-
-          return hasChanges ? tr : null;
-        },
-      }),
+      ),
     ];
   },
 });

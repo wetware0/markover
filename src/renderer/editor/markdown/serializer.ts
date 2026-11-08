@@ -557,6 +557,15 @@ const nodeHandlers: Record<string, NodeHandler> = {
 
 // --- Mark Wrappers ---
 
+/** Attribute values (author names especially) may contain quotes or angle brackets. */
+function escapeHtmlAttr(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function getMarkWrapper(mark: Mark): { open: string; close: string } | null {
   switch (mark.type.name) {
     case 'bold':
@@ -588,17 +597,17 @@ function getMarkWrapper(mark: Mark): { open: string; close: string } | null {
     }
     case 'markovHighlight':
       return {
-        open: `<span data-markov="hl" data-comment-id="${mark.attrs.commentId}">`,
+        open: `<span data-markov="hl" data-comment-id="${escapeHtmlAttr(mark.attrs.commentId)}">`,
         close: `</span>`,
       };
     case 'markovInsert':
       return {
-        open: `<span data-markov="ins" data-change-id="${mark.attrs.changeId}" data-author="${mark.attrs.author}" data-date="${mark.attrs.date}">`,
+        open: `<span data-markov="ins" data-change-id="${escapeHtmlAttr(mark.attrs.changeId)}" data-author="${escapeHtmlAttr(mark.attrs.author)}" data-date="${escapeHtmlAttr(mark.attrs.date)}">`,
         close: `</span>`,
       };
     case 'markovDelete':
       return {
-        open: `<span data-markov="del" data-change-id="${mark.attrs.changeId}" data-author="${mark.attrs.author}" data-date="${mark.attrs.date}">`,
+        open: `<span data-markov="del" data-change-id="${escapeHtmlAttr(mark.attrs.changeId)}" data-author="${escapeHtmlAttr(mark.attrs.author)}" data-date="${escapeHtmlAttr(mark.attrs.date)}">`,
         close: `</span>`,
       };
     default:

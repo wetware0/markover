@@ -62,6 +62,10 @@ function ToolbarButton({ onClick, isActive, disabled, title, children }: Toolbar
   return (
     <button
       type="button"
+      // Keep focus (and the selection) in the editor: a mouse click on a
+      // toolbar button must not leave the caret on the button, otherwise the
+      // next keystroke goes nowhere. Keyboard activation is unaffected.
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       disabled={disabled}
       title={title}

@@ -58,6 +58,9 @@ test('typed prices survive saving and reopening a real file', async ({ page, ele
     });
     await expect.poll(() => fs.existsSync(filePath)).toBe(true);
     expect(fs.readFileSync(filePath, 'utf8')).toContain('Prices are \\$10.00 and \\$20.00.');
+    // The file can exist before the renderer has processed the save result;
+    // wait for the clean title so "new" doesn't race the dirty flag.
+    await expect(page.getByText('prices.md', { exact: true })).toBeVisible();
 
     await electronApp.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0].webContents.send('menu:action', 'new');

@@ -4,6 +4,33 @@ All notable changes to Markover are documented here.
 
 ---
 
+## Unreleased
+
+### Added
+
+- Clicking a change in the Changes sidebar selects it in the document. Clicking commented text opens and highlights its thread; moving the caret into commented text makes that thread active.
+- Comment threads whose text has been deleted stay in the sidebar marked *text deleted* (and are kept on save) instead of silently losing their anchor. Reopening such a file no longer reports a collaboration-data error.
+
+### Fixed
+
+- **Tracked edits now coalesce the way they do in Word.** Contiguous typing by the same author is one insertion however slowly you type, including after typo corrections, cursor moves, and returning to the edge of your own insertion. Backspacing or forward-deleting over a word is one deletion. Deleting your own pending insertion removes it outright, and typing over a selection reads as one deletion followed by one insertion. Different authors' changes stay separate.
+- Backspacing repeatedly with tracking on no longer erases the struck-through text on every second keystroke; the caret now steps over deleted text and extends the deletion.
+- Typing inside an existing tracked insertion or deletion no longer duplicates characters or stacks two change marks on the same text.
+- Tracked deletions keep their formatting and comment highlights, and deletions across paragraphs are tracked as one change with the paragraph break restored on reject.
+- Undo after a tracked edit no longer leaves orphaned insertion or deletion marks.
+- Accepting a deleted word inside a table cell no longer deletes the whole table. Accepting a deleted paragraph removes the paragraph rather than leaving an empty line. Accept All and Reject All are a single undo step.
+- The Changes sidebar shows the full text of each change (previously only its first formatted fragment).
+- Author names containing quotes or angle brackets no longer corrupt tracked-change markup on save.
+- Publish now handles comments placed on tracked changes and deletions containing comments or formatting; previously nested markup could leave stray `<span>` tags in the published file.
+- Pasting copied tracked or commented text no longer duplicates change or comment ids (pasted text is plain, and copied deleted text is dropped).
+- After toolbar or sidebar actions (accept/reject, resolve/reopen/reply/delete, sidebar tabs and toggle) focus returns to the editor, so the next keystroke lands in the document.
+
+### Internal
+
+- Track-changes logic is now a pure `trackTransactions` function plus `track-changes-ops.ts` (collect, accept/reject, publish), so the headless suite drives the real plugin with prosemirror-history. Added 32 behaviour cases to `scripts/roundtrip-test.ts` and new Playwright specs for slow-typing coalescing, word deletion, undo, accept/reject, save/reopen, and comment flows.
+
+---
+
 ## [1.1.3](https://github.com/wetware0/markover/compare/v1.1.2...v1.1.3) - 2026-10-15
 
 ### Fixed

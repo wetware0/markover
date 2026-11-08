@@ -27,8 +27,8 @@ Built with Electron, React, and TipTap (ProseMirror).
 
 ### Collaboration
 
-- **Comments** — Select text and add a comment thread; threads are shown in the sidebar and highlighted in the document; replies, resolve, and delete supported
-- **Track Changes** — Enable tracking to mark insertions (green) and deletions (red strikethrough); accept or reject changes individually or all at once
+- **Comments** — Select text and add a comment thread; threads are shown in the sidebar and highlighted in the document; replies, resolve/reopen, and delete supported. Clicking a thread selects its text, and clicking commented text opens its thread. If the commented text is deleted, the thread is kept and marked *text deleted* instead of disappearing
+- **Track Changes** — Enable tracking to mark insertions (green) and deletions (red strikethrough); accept or reject changes individually or all at once. Edits coalesce like Word: contiguous typing or deleting by the same author is one change however slowly you type, deleting your own pending insertion simply removes it, and typing over a selection reads as one deletion followed by one insertion
 - **Author identity** — Set your display name and colour via the avatar button in the toolbar
 
 ### File Handling
@@ -136,7 +136,8 @@ Output is placed in `out/make/`.
 
 ## Known Limitations
 
-- **Track changes and structural edits** — Deleting across paragraph boundaries or through formatted node boundaries may not be tracked cleanly; the plugin skips structural changes to avoid corruption.
+- **Track changes and structure** — Text deleted across paragraphs, list items or formatting is tracked (paragraph breaks are restored while the deletion is pending and removed on accept). Paragraph splits and joins on their own (Enter, or Backspace at the start of a paragraph), block-type changes (heading, list, quote) and formatting changes are applied directly and not tracked. Edits inside code blocks, and deletion of whole code, math, or Mermaid blocks, cannot carry change marks; they are applied directly and a notice is shown.
+- **Tracked inline atoms** — A tracked change that covers inline math, an image or a footnote reference is shown while editing, but only the surrounding text keeps its change markup when saved.
 - **Blockquote line breaks** — Two consecutive `> `lines without a blank line are rendered with a hard line break between them (rather than merged into one paragraph). This is intentional but deviates from strict CommonMark behaviour.
 - **Spell check in raw mode** — The CodeMirror raw editor uses the browser's built-in spell checker (red underlines) rather than Electron's Hunspell integration; context-menu suggestions are not available in raw mode.
 

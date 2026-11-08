@@ -6,6 +6,9 @@ export interface TrackedChange {
   author: string;
   date: string;
   text: string;
+  /** Document range of the change (first to last marked node). */
+  from?: number;
+  to?: number;
 }
 
 interface TrackChangesState {

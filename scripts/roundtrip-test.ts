@@ -56,6 +56,7 @@ import {
   serializeMarkoverFile,
 } from '../src/shared/markover-codec';
 import { Node as PMNode } from '@tiptap/pm/model';
+import { runCollabCases } from './collab-cases';
 
 // Mirror the editor stack from src/renderer/editor/use-editor.ts.
 // Plain TableCell/TableHeader without the React-only AlignedTable extension
@@ -701,6 +702,18 @@ for (const c of serializationCases) {
   if (ok) { passed++; console.log('  PASS  pr-diff: identical input has no marks'); }
   else { failed++; failures.push({ name: 'pr-diff identical', input: same, expected: 'no markers', got: out }); console.log('  FAIL  pr-diff: identical input has no marks'); }
 }
+
+// Track changes + comments behaviour (plugin, accept/reject, publish, paste).
+runCollabCases({
+  schema,
+  parse: (md) => PMNode.fromJSON(schema, generateJSON(markdownToHtml(parseMarkoverFile(md).cleanMarkdown), extensions)),
+  record: (name, error) => {
+    if (error === null) { passed++; console.log(`  PASS  ${name}`); return; }
+    failed++;
+    failures.push({ name, input: '(behaviour case)', expected: 'no error', got: error });
+    console.log(`  FAIL  ${name}`);
+  },
+});
 
 console.log(`\n${passed} passed, ${failed} failed (${passed + failed} total)\n`);
 
